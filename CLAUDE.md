@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**fheskills** is an external-facing skill set for AI agents building encrypted smart contracts with Zama's fhEVM (Fully Homomorphic Encryption Virtual Machine). It teaches developers how to build confidential dApps with smart contracts and frontends/backends that interact with the relayer-sdk.
+**fheskills** is an external-facing skill set for AI agents building encrypted smart contracts with Zama's FHEVM (Fully Homomorphic Encryption Virtual Machine). It teaches developers how to build confidential dApps with smart contracts and frontends/backends that interact with the relayer-sdk.
 
 **Deployed at:** https://fheskills.com (planned)
 **Modeled after:** https://github.com/austintgriffith/ethskills
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Key Terminology
 
-**Say "fhEVM" not "FHEVM" or "FheVM."** Lowercase "fh", uppercase "EVM". This is Zama's official convention.
+**Say "FHEVM" not "FHEVM" or "FheVM."** Lowercase "fh", uppercase "EVM". This is Zama's official convention.
 
 ## Developer Journey
 
@@ -44,7 +44,7 @@ All frontend/backend interaction happens via the **relayer-sdk**: https://github
 
 ### Smart Contract Template
 ```bash
-# fhEVM Hardhat Template - Complete Solidity development environment
+# FHEVM Hardhat Template - Complete Solidity development environment
 git clone https://github.com/zama-ai/fhevm-hardhat-template
 cd fhevm-hardhat-template
 npm install
@@ -53,7 +53,7 @@ npm install
 
 ### Frontend Template
 ```bash
-# fhEVM React Template - Frontend with relayer-sdk integration
+# FHEVM React Template - Frontend with relayer-sdk integration
 git clone https://github.com/zama-ai/fhevm-react-template
 cd fhevm-react-template
 npm install
@@ -237,12 +237,12 @@ fheskills/
 ├── fhevm/SKILL.md        # Core API - euint types, FHE operations
 ├── acl/SKILL.md          # Access Control Lists (#1 bug source)
 ├── patterns/SKILL.md     # Confidential ERC-20, voting, auctions
-├── testing/SKILL.md      # Hardhat + fhEVM plugin testing
+├── testing/SKILL.md      # Hardhat + FHEVM plugin testing
 ├── security/SKILL.md     # FHE-specific vulnerabilities
 ├── addresses/SKILL.md    # Verified contract addresses
 ├── tools/SKILL.md        # Hardhat toolchain
 ├── frontend/SKILL.md     # Client-side encryption with fhevmjs
-├── deployment/SKILL.md   # Deploying to fhEVM chains
+├── deployment/SKILL.md   # Deploying to FHEVM chains
 └── migration/SKILL.md    # Adding FHE to existing contracts
 ```
 
@@ -272,7 +272,7 @@ See ethskills' CONTRIBUTING.md for full methodology: https://github.com/austintg
 
 ### ACL (Access Control Lists)
 
-The #1 fhEVM bug is forgetting ACL grants. Every encrypted value needs permission grants:
+The #1 FHEVM bug is forgetting ACL grants. Every encrypted value needs permission grants:
 
 ```solidity
 // WRONG - value is created but nobody can use it
@@ -376,7 +376,7 @@ const publicValue = await getPublicValue(encryptedValue);
 ### Verifying FHE API Changes
 
 ```bash
-# Check latest fhEVM Solidity package
+# Check latest FHEVM Solidity package
 npm view @fhevm/solidity version
 npm view @fhevm/solidity
 
@@ -507,7 +507,7 @@ describe("ConfidentialToken", function () {
 
 ### Pre-Deploy Security Checklist
 
-Before deploying any fhEVM contract:
+Before deploying any FHEVM contract:
 
 - [ ] **ACL grants** — `FHE.allowThis()` and `FHE.allow()` after EVERY state update
 - [ ] **Access control** — every admin function has `onlyOwner` or role-based restriction
@@ -524,7 +524,7 @@ Before deploying any fhEVM contract:
 
 ### Hardhat Only (No Foundry)
 
-fhEVM does not have Foundry support. All testing uses Hardhat + `fhevm-hardhat-plugin`.
+FHEVM does not have Foundry support. All testing uses Hardhat + `fhevm-hardhat-plugin`.
 
 ```javascript
 // hardhat.config.js

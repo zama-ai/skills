@@ -1,13 +1,13 @@
 ---
 name: tools
-description: The fhEVM development toolchain — Hardhat plugin, Solidity library, coprocessor, and what actually works today for building encrypted dApps.
+description: The FHEVM development toolchain — Hardhat plugin, Solidity library, coprocessor, and what actually works today for building encrypted dApps.
 ---
 
-# Tools — The fhEVM Development Stack
+# Tools — The FHEVM Development Stack
 
 ## What You Probably Got Wrong
 
-**You tried to use Foundry.** fhEVM doesn't have Foundry support yet. Use Hardhat with the `fhevm-hardhat-plugin`.
+**You tried to use Foundry.** FHEVM doesn't have Foundry support yet. Use Hardhat with the `fhevm-hardhat-plugin`.
 
 **You imported from the wrong package.** The Solidity library is `@fhevm/solidity`. The Hardhat plugin is `@fhevm/hardhat-plugin`. Don't confuse them.
 
@@ -25,7 +25,7 @@ description: The fhEVM development toolchain — Hardhat plugin, Solidity librar
 │  Hardhat + @fhevm/hardhat-plugin                   │
 │  Local FHE mock for testing                        │
 ├───────────────────────────────────────────────────┤
-│  fhEVM Host Contracts (onchain)                    │
+│  FHEVM Host Contracts (onchain)                    │
 │  ACL, FHEVMExecutor, KMSVerifier                   │
 ├───────────────────────────────────────────────────┤
 │  Coprocessor (offchain)                            │
@@ -43,7 +43,7 @@ description: The fhEVM development toolchain — Hardhat plugin, Solidity librar
 ### New Project
 
 ```bash
-# Create a new Hardhat project with fhEVM
+# Create a new Hardhat project with FHEVM
 mkdir my-fhevm-project && cd my-fhevm-project
 npm init -y
 npm install --save-dev hardhat @fhevm/hardhat-plugin @fhevm/solidity
@@ -171,7 +171,7 @@ await contract.myFunction(
 ## Useful Links
 
 - **Zama Documentation:** https://docs.zama.ai/protocol
-- **fhEVM Repository:** https://github.com/zama-ai/fhevm
-- **fhEVM Solidity Library:** npm `@fhevm/solidity`
+- **FHEVM Repository:** https://github.com/zama-ai/fhevm
+- **FHEVM Solidity Library:** npm `@fhevm/solidity`
 - **Hardhat Plugin:** npm `@fhevm/hardhat-plugin`
 - **Example Contracts:** https://github.com/zama-ai/fhevm/tree/main/examples

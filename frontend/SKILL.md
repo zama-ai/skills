@@ -24,7 +24,7 @@ Users encrypt values in the browser before submitting transactions. The contract
 ```typescript
 import { createInstance } from "fhevmjs";
 
-// Initialize fhEVM instance (once, at app startup)
+// Initialize FHEVM instance (once, at app startup)
 const fhevm = await createInstance({
   networkUrl: "https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY",
   gatewayUrl: "https://gateway.zama.ai",

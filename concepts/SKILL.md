@@ -19,11 +19,11 @@ description: The essential mental models for building with encrypted computation
 
 ## Nothing Is Plaintext
 
-**This is the most important concept in fhEVM. If you internalize nothing else, internalize this.**
+**This is the most important concept in FHEVM. If you internalize nothing else, internalize this.**
 
 ### Encrypted Values Are Opaque
 
-An encrypted value in fhEVM is a handle — an opaque reference to a ciphertext managed by the coprocessor. You cannot:
+An encrypted value in FHEVM is a handle — an opaque reference to a ciphertext managed by the coprocessor. You cannot:
 
 - Read its value (not even the contract that created it)
 - Use it in `if`, `require`, `assert`, `while`
@@ -58,7 +58,7 @@ if (balance >= amount) {
     // revert or skip
 }
 
-// fhEVM — YOU CANNOT DO THIS
+// FHEVM — YOU CANNOT DO THIS
 // FHE.ge(balance, amount) returns an ebool — an ENCRYPTED boolean
 // You can't use an encrypted boolean in an if statement
 // The EVM doesn't know if it's true or false — that's the whole point
@@ -126,7 +126,7 @@ Created ──→ Empty ACL (nobody can use it)
          ──[FHE.allowTransient(val, addr)]──→ Address can use it THIS TX ONLY
 ```
 
-**The #1 bug in fhEVM development:** storing an encrypted value without calling `FHE.allowThis()`. On the next transaction, the contract tries to use the stored value and fails — it doesn't have permission to access its own data.
+**The #1 bug in FHEVM development:** storing an encrypted value without calling `FHE.allowThis()`. On the next transaction, the contract tries to use the stored value and fails — it doesn't have permission to access its own data.
 
 ---
 
@@ -165,7 +165,7 @@ euint64 real = FHE.fromExternal(externalHandle, inputProof);
 *"ZK proofs say 'I know a secret that satisfies this condition' without revealing the secret. It's a one-time proof. FHE says 'here's encrypted data — compute on it without ever seeing it.' FHE enables ongoing computation on secrets. ZK proves things about secrets. Different tools for different jobs."*
 
 ### "What about performance?"
-*"FHE operations are slower than plaintext operations — that's the tradeoff for privacy. The fhEVM coprocessor handles the heavy math offchain, so you're not paying for raw FHE on the EVM. But encrypted operations still cost more gas than plaintext ones. Design your contracts to minimize the number of FHE operations — encrypt only what matters."*
+*"FHE operations are slower than plaintext operations — that's the tradeoff for privacy. The FHEVM coprocessor handles the heavy math offchain, so you're not paying for raw FHE on the EVM. But encrypted operations still cost more gas than plaintext ones. Design your contracts to minimize the number of FHE operations — encrypt only what matters."*
 
 ### "Can the coprocessor see my data?"
 *"The coprocessor performs computation on ciphertexts. It needs the evaluation key (which lets it compute on encrypted data) but NOT the decryption key. Only the Key Management Service (KMS) holds decryption keys, and decryption only happens when explicitly requested with proper ACL authorization."*
@@ -175,6 +175,6 @@ euint64 real = FHE.fromExternal(externalHandle, inputProof);
 ## Resources
 
 - **Zama Documentation:** https://docs.zama.ai/protocol
-- **fhEVM GitHub:** https://github.com/zama-ai/fhevm
-- **fhEVM Solidity Library:** https://github.com/zama-ai/fhevm/tree/main/lib
+- **FHEVM GitHub:** https://github.com/zama-ai/fhevm
+- **FHEVM Solidity Library:** https://github.com/zama-ai/fhevm/tree/main/lib
 - **FHESkills (for agents):** https://fheskills.com

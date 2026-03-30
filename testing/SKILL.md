@@ -1,6 +1,6 @@
 ---
 name: testing
-description: Testing encrypted contracts with Hardhat and the fhEVM plugin. How to create encrypted inputs, decrypt values in tests, and verify ACL behavior.
+description: Testing encrypted contracts with Hardhat and the FHEVM plugin. How to create encrypted inputs, decrypt values in tests, and verify ACL behavior.
 ---
 
 # Testing Encrypted Contracts
@@ -9,7 +9,7 @@ description: Testing encrypted contracts with Hardhat and the fhEVM plugin. How 
 
 **You tried to assert on encrypted values directly.** `expect(balance).to.equal(100)` doesn't work — `balance` is an encrypted handle, not a number. You need to decrypt it in your test first.
 
-**You skipped ACL testing.** The most common fhEVM bug is missing ACL permissions. If you don't test that unauthorized addresses get rejected, you'll ship broken access control.
+**You skipped ACL testing.** The most common FHEVM bug is missing ACL permissions. If you don't test that unauthorized addresses get rejected, you'll ship broken access control.
 
 **You only tested the happy path.** FHE contracts silently handle failures (via `FHE.select`). If a transfer fails because of insufficient balance, it transfers 0 — it doesn't revert. You need to verify the zero-transfer case explicitly.
 
@@ -25,7 +25,7 @@ import "@fhevm/hardhat-plugin";
 
 const config: HardhatUserConfig = {
   solidity: "0.8.24",
-  // fhEVM plugin automatically configures the FHE environment
+  // FHEVM plugin automatically configures the FHE environment
 };
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: deployment
-description: Deploying encrypted contracts to fhEVM-compatible chains. Chain configuration, testnet-first workflow, and post-deploy verification.
+description: Deploying encrypted contracts to FHEVM-compatible chains. Chain configuration, testnet-first workflow, and post-deploy verification.
 ---
 
 # Deployment — Shipping Encrypted Contracts

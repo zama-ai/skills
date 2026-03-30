@@ -7,9 +7,9 @@ description: FHE-specific vulnerabilities and security patterns. What can go wro
 
 ## What You Probably Got Wrong
 
-**You think regular Solidity security is enough.** fhEVM inherits all standard Solidity vulnerabilities (reentrancy, access control, etc.) AND adds a new class of bugs unique to encrypted computation. This skill covers the FHE-specific ones. Standard Solidity security still applies.
+**You think regular Solidity security is enough.** FHEVM inherits all standard Solidity vulnerabilities (reentrancy, access control, etc.) AND adds a new class of bugs unique to encrypted computation. This skill covers the FHE-specific ones. Standard Solidity security still applies.
 
-**You think encrypted means secure.** Encrypting values doesn't automatically make your contract secure. ACL misconfig, information leaks through control flow, and trivial encryption confusion are all fhEVM-specific attack vectors.
+**You think encrypted means secure.** Encrypting values doesn't automatically make your contract secure. ACL misconfig, information leaks through control flow, and trivial encryption confusion are all FHEVM-specific attack vectors.
 
 ---
 
@@ -164,7 +164,7 @@ event Transfer(address indexed from, address indexed to);
 
 ## Standard Solidity Vulnerabilities That Still Apply
 
-fhEVM contracts are still Solidity contracts. These standard vulnerabilities apply:
+FHEVM contracts are still Solidity contracts. These standard vulnerabilities apply:
 
 1. **Reentrancy** — Use CEI pattern + `nonReentrant` (OpenZeppelin)
 2. **Access control** — Use `onlyOwner`, `AccessControl` for privileged functions

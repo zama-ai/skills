@@ -48,7 +48,7 @@
     },
     {
       "name": "testing",
-      "description": "Testing encrypted contracts with Hardhat and fhEVM plugin",
+      "description": "Testing encrypted contracts with Hardhat and FHEVM plugin",
       "path": "testing/SKILL.md"
     },
     {
@@ -58,12 +58,12 @@
     },
     {
       "name": "addresses",
-      "description": "Verified fhEVM contract addresses for mainnet and Sepolia",
+      "description": "Verified FHEVM contract addresses for mainnet and Sepolia",
       "path": "addresses/SKILL.md"
     },
     {
       "name": "tools",
-      "description": "fhEVM development toolchain — Hardhat plugin, Solidity library",
+      "description": "FHEVM development toolchain — Hardhat plugin, Solidity library",
       "path": "tools/SKILL.md"
     },
     {
@@ -73,7 +73,7 @@
     },
     {
       "name": "deployment",
-      "description": "Deploying encrypted contracts to fhEVM-compatible chains",
+      "description": "Deploying encrypted contracts to FHEVM-compatible chains",
       "path": "deployment/SKILL.md"
     },
     {

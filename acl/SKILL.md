@@ -1,6 +1,6 @@
 ---
 name: acl
-description: Access Control Lists for encrypted values in fhEVM. Who can use and decrypt encrypted data. This is where most fhEVM bugs live — forgetting ACL permissions is the #1 mistake.
+description: Access Control Lists for encrypted values in FHEVM. Who can use and decrypt encrypted data. This is where most FHEVM bugs live — forgetting ACL permissions is the #1 mistake.
 ---
 
 # ACL — Access Control for Encrypted Values
@@ -17,7 +17,7 @@ description: Access Control Lists for encrypted values in fhEVM. Who can use and
 
 ## How ACL Works
 
-Every encrypted value in fhEVM is identified by a handle (a `uint256`). The ACL contract maintains a mapping:
+Every encrypted value in FHEVM is identified by a handle (a `uint256`). The ACL contract maintains a mapping:
 
 ```
 handle → set of authorized addresses
@@ -285,7 +285,7 @@ FHE.allow(newBalance, user);
 
 ## Checklist
 
-Before deploying any fhEVM contract:
+Before deploying any FHEVM contract:
 
 - [ ] Every encrypted state update has `FHE.allowThis()` immediately after
 - [ ] Every user-facing encrypted value has `FHE.allow(value, user)`

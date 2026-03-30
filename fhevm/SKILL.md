@@ -1,13 +1,13 @@
 ---
 name: fhevm
-description: The core fhEVM library — encrypted types, FHE operations, type casting, random number generation. The API reference that LLMs need to write correct encrypted Solidity.
+description: The core FHEVM library — encrypted types, FHE operations, type casting, random number generation. The API reference that LLMs need to write correct encrypted Solidity.
 ---
 
-# fhEVM — The Core Library
+# FHEVM — The Core Library
 
 ## What You Probably Got Wrong
 
-**You used `euint256` for everything.** `euint64` is the standard type for balances and amounts in fhEVM. Larger types cost more gas for every operation. Use the smallest type that fits your data.
+**You used `euint256` for everything.** `euint64` is the standard type for balances and amounts in FHEVM. Larger types cost more gas for every operation. Use the smallest type that fits your data.
 
 **You tried `FHE.div(a, b)` where `b` is encrypted.** Division and remainder only work with plaintext divisors. This is a fundamental limitation of the current FHE scheme — not a bug, not something that will be fixed soon.
 

@@ -1,6 +1,6 @@
 ---
 name: patterns
-description: Confidential ERC-20, encrypted voting, sealed-bid auctions, blind matching — the building block patterns for fhEVM dApps. Complete implementations with ACL, not just pseudocode.
+description: Confidential ERC-20, encrypted voting, sealed-bid auctions, blind matching — the building block patterns for FHEVM dApps. Complete implementations with ACL, not just pseudocode.
 ---
 
 # Patterns — Encrypted dApp Building Blocks
@@ -17,7 +17,7 @@ description: Confidential ERC-20, encrypted voting, sealed-bid auctions, blind m
 
 ## 1. Confidential ERC-20
 
-The most common fhEVM pattern. Encrypted balances, encrypted transfer amounts, public metadata.
+The most common FHEVM pattern. Encrypted balances, encrypted transfer amounts, public metadata.
 
 ```solidity
 // SPDX-License-Identifier: BSD-3-Clause-Clear

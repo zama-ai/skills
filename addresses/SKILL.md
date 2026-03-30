@@ -1,6 +1,6 @@
 ---
 name: addresses
-description: Verified fhEVM and Zama protocol contract addresses across all supported chains. Use this instead of guessing or hallucinating addresses. Source — github.com/zama-ai/protocol-apps and ZamaConfig.sol.
+description: Verified FHEVM and Zama protocol contract addresses across all supported chains. Use this instead of guessing or hallucinating addresses. Source — github.com/zama-ai/protocol-apps and ZamaConfig.sol.
 ---
 
 # Contract Addresses
@@ -15,7 +15,7 @@ description: Verified fhEVM and Zama protocol contract addresses across all supp
 
 ---
 
-## Recommended: Use ZamaEthereumConfig
+## Recommended: Use ZamaEthereumConfig for configuration on ethereum
 
 ```solidity
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
@@ -32,7 +32,7 @@ contract MyContract is ZamaEthereumConfig {
 
 ---
 
-## fhEVM Core Infrastructure
+## FHEVM Core Infrastructure
 
 These are the contracts that make FHE operations work. Configured automatically by `ZamaEthereumConfig`.
 
