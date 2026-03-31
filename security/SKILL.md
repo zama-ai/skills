@@ -164,13 +164,139 @@ event Transfer(address indexed from, address indexed to);
 
 ## Standard Solidity Vulnerabilities That Still Apply
 
-FHEVM contracts are still Solidity contracts. These standard vulnerabilities apply:
+FHEVM contracts are still Solidity contracts. Every standard vulnerability applies. Encryption does NOT protect you from these.
 
-1. **Reentrancy** — Use CEI pattern + `nonReentrant` (OpenZeppelin)
-2. **Access control** — Use `onlyOwner`, `AccessControl` for privileged functions
-3. **Integer overflow** — Solidity 0.8+ prevents this for plaintext values, but encrypted arithmetic has its own modular behavior
-4. **Front-running** — Encrypted values help here (can't see amounts), but function selectors are still visible
-5. **Oracle manipulation** — If your encrypted contract uses price feeds, the same oracle security applies
+### Reentrancy
+
+External calls can re-enter your contract with stale state. Use Checks-Effects-Interactions + `nonReentrant`:
+
+```solidity
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+// ❌ VULNERABLE — state updated after external call
+function withdraw() external {
+    uint256 bal = balances[msg.sender];
+    (bool success,) = msg.sender.call{value: bal}("");
+    require(success);
+    balances[msg.sender] = 0; // Too late
+}
+
+// ✅ SAFE — CEI pattern + guard
+function withdraw() external nonReentrant {
+    uint256 bal = balances[msg.sender];
+    require(bal > 0, "Nothing to withdraw");
+    balances[msg.sender] = 0;  // Effect BEFORE interaction
+    (bool success,) = msg.sender.call{value: bal}("");
+    require(success, "Transfer failed");
+}
+```
+
+**Note for FHE:** You can't `require(bal > 0)` on encrypted values. Use `FHE.select()` to compute all paths, but still update encrypted state BEFORE any external calls.
+
+### Token Decimals Vary
+
+**USDC has 6 decimals, not 18.** When wrapping ERC-20s into confidential versions:
+
+```solidity
+// ❌ WRONG — assumes 18 decimals
+uint256 oneToken = 1e18;
+
+// ✅ CORRECT — check decimals
+uint256 oneToken = 10 ** IERC20Metadata(token).decimals();
+```
+
+Common decimals: USDC/USDT = 6, WBTC = 8, DAI/WETH = 18.
+
+### SafeERC20
+
+Some tokens (USDT) don't return `bool` on `transfer()`. Standard calls revert on success:
+
+```solidity
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+using SafeERC20 for IERC20;
+
+// ❌ WRONG — breaks with USDT
+token.transfer(to, amount);
+
+// ✅ CORRECT
+token.safeTransfer(to, amount);
+```
+
+**Token quirks to watch for:**
+- **Fee-on-transfer tokens:** Amount received < amount sent. Check balance before/after.
+- **Rebasing tokens (stETH):** Balance changes without transfers. Use wrapped versions (wstETH).
+- **Pausable/blocklist tokens (USDC, USDT):** Transfers can revert if paused or address is blocked.
+
+### No Floating Point
+
+Solidity has no `float`. Division truncates to zero:
+
+```solidity
+// ❌ WRONG — this equals 0
+uint256 fivePercent = 5 / 100;
+
+// ✅ CORRECT — basis points
+uint256 FEE_BPS = 500; // 5% = 500 basis points
+uint256 fee = (amount * FEE_BPS) / 10_000;
+```
+
+**Always multiply before dividing.** Division first = precision loss.
+
+### Access Control
+
+Every state-changing function needs explicit access control:
+
+```solidity
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+// ❌ WRONG — anyone can drain
+function emergencyWithdraw() external {
+    token.transfer(msg.sender, token.balanceOf(address(this)));
+}
+
+// ✅ CORRECT
+function emergencyWithdraw() external onlyOwner {
+    token.transfer(owner(), token.balanceOf(address(this)));
+}
+```
+
+### Input Validation
+
+```solidity
+function deposit(uint256 amount, address recipient) external {
+    require(amount > 0, "Zero amount");
+    require(recipient != address(0), "Zero address");
+    require(amount <= maxDeposit, "Exceeds max");
+}
+```
+
+### Front-Running & MEV
+
+Encrypted values help here — attackers can't see amounts in the mempool. But function selectors are still visible (they know you're calling `transfer()`), and the existence of a transaction leaks intent.
+
+For plaintext parameters (addresses, deadlines), standard MEV protections apply:
+- Use **Flashbots Protect RPC** for private mempool
+- Set tight slippage limits on any DEX interactions
+
+### Oracle Safety
+
+If your encrypted contract uses price feeds, the same oracle security applies:
+
+```solidity
+// ❌ DANGEROUS — DEX spot price manipulable via flash loan
+function getPrice() internal view returns (uint256) {
+    (uint112 r0, uint112 r1,) = pair.getReserves();
+    return (r1 * 1e18) / r0;
+}
+
+// ✅ SAFE — Chainlink with staleness check
+function getPrice() internal view returns (uint256) {
+    (, int256 price,, uint256 updatedAt,) = feed.latestRoundData();
+    require(block.timestamp - updatedAt < 3600, "Stale price");
+    require(price > 0, "Invalid price");
+    return uint256(price);
+}
+```
 
 ---
 
@@ -190,9 +316,13 @@ FHEVM contracts are still Solidity contracts. These standard vulnerabilities app
 
 ### Standard Solidity
 
-- [ ] Reentrancy protection (CEI + `nonReentrant`)
-- [ ] Access control on all privileged functions
+- [ ] Reentrancy protection (CEI + `nonReentrant`) on all functions with external calls
+- [ ] Access control on all privileged functions (`onlyOwner`, `AccessControl`)
 - [ ] Input validation (zero address, zero amount, bounds checks)
-- [ ] Events emitted for every state change
-- [ ] No hardcoded addresses (use config or constructor params)
+- [ ] SafeERC20 for all token operations
+- [ ] Token decimal handling — no hardcoded `1e18`
+- [ ] Multiply before divide in all math
+- [ ] Events emitted for every state change (addresses only, NOT encrypted values)
+- [ ] No hardcoded addresses (use `ZamaEthereumConfig` or constructor params)
+- [ ] Oracle staleness + sanity checks if using price feeds
 - [ ] Contract verified on block explorer after deployment

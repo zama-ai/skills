@@ -1,244 +1,281 @@
 ---
 name: building-blocks
-description: DeFi legos and protocol composability on Ethereum and L2s. Major protocols per chain — Aerodrome on Base, GMX/Pendle on Arbitrum, Velodrome on Optimism — plus mainnet primitives (Uniswap, Aave, Compound, Curve). How they work, how to build on them, and how to combine them. Use when building DeFi integrations, choosing protocols on a specific L2, designing yield strategies, or composing existing protocols into something new.
+description: Confidential DeFi building blocks — how encrypted contracts compose with existing protocols, confidential wrapper tokens (ERC-7984), and patterns for private DeFi. Use when building encrypted DeFi integrations, wrapping existing tokens, or composing confidential protocols.
 ---
 
-# Building Blocks (DeFi Legos)
+# Confidential DeFi Building Blocks
 
 ## What You Probably Got Wrong
 
-**DeFi TVL:** Check [DeFi Llama](https://defillama.com/chain/Ethereum) for current Ethereum DeFi TVL. If you're quoting numbers from 2023-2024, they're stale.
+**You built a confidential ERC-20 from scratch.** Zama already deploys official confidential wrappers (cUSDC, cUSDT, cWETH, etc.) via ERC-7984. Check `addresses/SKILL.md` before writing your own.
 
-**Uniswap V4 is live.** Launched mainnet **January 31, 2025** on 10+ chains. V4 introduced a **hooks system** — custom logic attached to pools (dynamic fees, TWAMM, limit orders, custom oracles). This is the biggest composability upgrade since flash loans. PoolManager addresses are different per chain (NOT deterministic like V3).
+**You tried to compose encrypted values with plaintext DeFi.** You can't pass an `euint64` to Uniswap — it expects `uint256`. Confidential DeFi operates in its own ecosystem. You compose within the confidential layer, and wrap/unwrap at the boundary.
 
-**Costs changed everything:** A flash loan arbitrage on mainnet costs ~$0.05-0.50 in gas now (was $5-50). This opens composability patterns that were previously uneconomical.
+**You forgot the wrap/unwrap boundary.** Every confidential DeFi system has a boundary where plaintext tokens become encrypted (wrap) and encrypted tokens become plaintext (unwrap). The wrap is simple. The unwrap requires decryption — and decryption is async.
 
-**The dominant DEX on each L2 is NOT Uniswap.** Aerodrome and Velodrome merged into **Aero** (November 2025, Dromos Labs) — the unified DEX dominates both Base and Optimism. Camelot is a major native DEX on Arbitrum. Don't default to Uniswap on every chain.
+**You ignored OpenZeppelin Confidential Contracts.** OpenZeppelin has production-ready implementations for confidential tokens, voting, and auctions. Start there, not from scratch: https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
 
-## Key Protocol Addresses (Verified Mar 2026)
+---
 
-| Protocol | Contract | Mainnet Address |
-|----------|----------|-----------------|
-| Uniswap V2 Router | Router | `0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D` |
-| Uniswap V2 Factory | Factory | `0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f` |
-| Uniswap V3 Factory | Factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` |
-| Uniswap V3 SwapRouter02 | Router | `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` |
-| Uniswap V4 PoolManager | PoolManager | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
-| Uniswap Universal Router (V4) | Router | `0x66a9893cc07d91d95644aedd05d03f95e1dba8af` |
-| Aave V3 Pool | Pool | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` |
+## ERC-7984: The Confidential Token Standard
 
-See `addresses/SKILL.md` for complete multi-chain address list including L2-native protocols (Aerodrome, GMX, Pendle, Velodrome, Camelot, SyncSwap, Morpho).
+ERC-7984 is the standard for confidential wrapped tokens. It wraps existing ERC-20 tokens into encrypted versions with private balances.
 
-## Uniswap V4 Hooks (New)
+### How It Works
 
-Hooks let you add custom logic that runs before/after swaps, liquidity changes, and donations. This is the biggest composability upgrade since flash loans.
+```
+Public ERC-20 (USDC)  ──[wrap]──→  Confidential ERC-7984 (cUSDC)
+                                          │
+                                    All balances encrypted
+                                    All transfers private
+                                    ACL controls who decrypts
+                                          │
+Confidential ERC-7984 (cUSDC) ──[unwrap]──→  Public ERC-20 (USDC)
+                                    (requires async decryption)
+```
 
-### Hook Interface (Solidity)
+### Basic ERC-7984 Token
 
 ```solidity
-import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ERC7984} from "@openzeppelin/confidential-contracts/token/ERC7984/ERC7984.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {FHE, externalEuint64, euint64} from "@fhevm/solidity/lib/FHE.sol";
 
-contract DynamicFeeHook is BaseHook {
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
-
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
-        return Hooks.Permissions({
-            beforeInitialize: false,
-            afterInitialize: false,
-            beforeAddLiquidity: false,
-            afterAddLiquidity: false,
-            beforeRemoveLiquidity: false,
-            afterRemoveLiquidity: false,
-            beforeSwap: true,           // ← We hook here
-            afterSwap: false,
-            beforeDonate: false,
-            afterDonate: false,
-            beforeSwapReturnDelta: false,
-            afterSwapReturnDelta: false,
-            afterAddLiquidityReturnDelta: false,
-            afterRemoveLiquidityReturnDelta: false
-        });
-    }
-
-    // Dynamic fee: higher fee during high-volume periods
-    function beforeSwap(
-        address,
-        PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
-        bytes calldata
-    ) external override returns (bytes4, BeforeSwapDelta, uint24) {
-        // Return dynamic fee override (e.g., 0.05% normally, 0.30% during volatility)
-        uint24 fee = _isHighVolatility() ? 3000 : 500;
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee | 0x800000);
+contract MyConfidentialToken is ZamaEthereumConfig, ERC7984, Ownable2Step {
+    constructor(
+        address owner,
+        uint64 amount,
+        string memory name_,
+        string memory symbol_,
+        string memory tokenURI_
+    ) ERC7984(name_, symbol_, tokenURI_) Ownable(owner) {
+        euint64 encryptedAmount = FHE.asEuint64(amount);
+        _mint(owner, encryptedAmount);
     }
 }
 ```
 
-**Hook use cases with real code patterns:**
-- **Dynamic fees** — adjust based on volatility, time-of-day, or oracle data
-- **TWAMM** — split large orders over time to reduce price impact
-- **Limit orders** — execute when price crosses a threshold
-- **MEV protection** — auction swap ordering rights to searchers
-- **Custom oracles** — TWAP updated on every swap
-
-## Composability Patterns (Updated for 2026 Gas)
-
-These patterns are now **economically viable** even for small amounts due to sub-dollar gas:
-
-### Flash Loan Arbitrage
-Borrow from Aave → swap on Uniswap for profit → repay Aave. All in one transaction. If unprofitable, reverts (lose only gas: ~$0.05-0.50).
-
-### Leveraged Yield Farming
-Deposit ETH on Aave → borrow stablecoin → swap for more ETH → deposit again → repeat. Gas cost per loop: ~$0.02 on mainnet, negligible on L2.
-
-### Meta-Aggregation
-Route swaps across multiple DEXs for best execution. 1inch and Paraswap check Uniswap, Curve, Sushi simultaneously.
-
-### ERC-4626 Yield Vaults
-
-Standard vault interface — the "ERC-20 of yield." Every vault exposes the same functions regardless of strategy.
+### Wrapping ERC-20 → ERC-7984
 
 ```solidity
-import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-import {ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC7984ERC20Wrapper} from "@openzeppelin/confidential-contracts/token/ERC7984/extensions/ERC7984ERC20Wrapper.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {FHE} from "@fhevm/solidity/lib/FHE.sol";
 
-contract SimpleYieldVault is ERC4626 {
-    constructor(IERC20 asset_) 
-        ERC4626(asset_) 
-        ERC20("Vault Shares", "vSHARE") 
-    {}
+contract ConfidentialUSDC is ERC7984ERC20Wrapper {
+    constructor(IERC20 usdc)
+        ERC7984ERC20Wrapper(usdc)
+        ERC7984("Confidential USDC", "cUSDC", "") {}
 
-    // totalAssets() drives the share price
-    // As yield accrues, totalAssets grows → shares worth more
-    function totalAssets() public view override returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this)) + _getAccruedYield();
+    // Wrap: plaintext USDC → encrypted cUSDC
+    function wrap(address to, uint256 amount) public virtual {
+        SafeERC20.safeTransferFrom(underlying(), msg.sender, address(this), amount);
+        _mint(to, FHE.asEuint64(uint64(amount)));
     }
-}
 
-// Usage: deposit/withdraw are standardized
-// vault.deposit(1000e6, msg.sender);  // deposit 1000 USDC, get shares
-// vault.redeem(shares, msg.sender, msg.sender);  // burn shares, get USDC back
-// vault.convertToAssets(shares);  // how much USDC are my shares worth?
+    // Unwrap: encrypted cUSDC → plaintext USDC (requires decryption)
+}
 ```
 
-**Why ERC-4626 matters:** Composability. Any protocol can integrate any vault without custom adapters. Yearn V3, Aave's wrapped tokens, Morpho vaults, Pendle yield tokens — all ERC-4626.
+**Key difference from regular ERC-20:**
+- All balances are `euint64` (encrypted)
+- No public `balanceOf()` — balances are private
+- Transfer events emit addresses but NOT amounts
+- Cannot `require()` on balances — use `FHE.select()` for silent failure
 
-### Flash Loan (Aave V3 — Complete Pattern)
+---
+
+## Official Confidential Wrappers (Already Deployed)
+
+**Don't build these yourself.** Zama has deployed official wrappers:
+
+### Ethereum Mainnet
+| Token | Symbol | Address |
+|-------|--------|---------|
+| Confidential USDC | `cUSDC` | `0xe978F22157048E5DB8E5d07971376e86671672B2` |
+| Confidential USDT | `cUSDT` | `0xAe0207C757Aa2B4019Ad96edD0092ddc63EF0c50` |
+| Confidential WETH | `cWETH` | `0xda9396b82634Ea99243cE51258B6A5Ae512D4893` |
+| Confidential ZAMA | `cZAMA` | `0x80CB147Fd86dC6dEe3Eee7e4Cee33d1397d98071` |
+
+See `addresses/SKILL.md` for the full list including Sepolia testnet mock wrappers.
+
+---
+
+## Composability Patterns
+
+### Pattern 1: Confidential Vault
+
+A vault that accepts confidential tokens and earns yield — all balances encrypted:
 
 ```solidity
-import {FlashLoanSimpleReceiverBase} from 
-    "@aave/v3-core/contracts/flashloan-v3/base/FlashLoanSimpleReceiverBase.sol";
-import {IPoolAddressesProvider} from 
-    "@aave/v3-core/contracts/interfaces/IPoolAddressesProvider.sol";
+contract ConfidentialVault is ZamaEthereumConfig {
+    IERC7984 public immutable cToken;
+    mapping(address => euint64) private shares;
+    euint64 private totalShares;
 
-contract FlashLoanArb is FlashLoanSimpleReceiverBase {
-    constructor(IPoolAddressesProvider provider) 
-        FlashLoanSimpleReceiverBase(provider) {}
+    function deposit(externalEuint64 amount, bytes calldata proof) external {
+        euint64 amt = FHE.fromExternal(amount, proof);
 
-    function executeArb(address token, uint256 amount) external {
-        // Borrow `amount` of `token` — must repay + 0.05% fee in same tx
-        POOL.flashLoanSimple(address(this), token, amount, "", 0);
-    }
+        // Transfer cTokens from user to vault
+        cToken.transferFrom(msg.sender, address(this), amt);
 
-    function executeOperation(
-        address asset,
-        uint256 amount,
-        uint256 premium,  // 0.05% fee
-        address,
-        bytes calldata
-    ) external override returns (bool) {
-        // --- Your arbitrage logic here ---
-        // Buy cheap on DEX A, sell expensive on DEX B
-        // Must end with at least `amount + premium` of `asset`
-        
-        uint256 owed = amount + premium;
-        IERC20(asset).approve(address(POOL), owed);
-        return true;  // If unprofitable, revert here — lose only gas (~$0.05-0.50)
+        // Mint shares (simplified — real vault needs share price calc)
+        shares[msg.sender] = FHE.add(shares[msg.sender], amt);
+        FHE.allowThis(shares[msg.sender]);
+        FHE.allow(shares[msg.sender], msg.sender);
+
+        totalShares = FHE.add(totalShares, amt);
+        FHE.allowThis(totalShares);
     }
 }
 ```
 
-**Aave V3 Pool (mainnet):** `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`
-**Flash loan fee:** 0.05% (5 basis points). Free if you repay to an Aave debt position.
+### Pattern 2: Confidential Swap (Sealed Order)
 
-## Building on Base
+Users submit encrypted swap orders. Nobody sees the amounts until execution:
 
-**Dominant DEX: Aero** (formerly Aerodrome, ~$500-600M TVL) — NOT Uniswap. In November 2025, Dromos Labs merged Aerodrome (Base) and Velodrome (Optimism) into a unified cross-chain DEX called **Aero**. Same contracts, same ve(3,3) model, new brand.
-
-### How Aero Works (Critical Difference from Uniswap)
-- **LPs deposit tokens** into pools → earn **AERO emissions** (not trading fees!)
-- **veAERO voters** lock AERO → vote on which pools get emissions → earn **100% of trading fees + bribes**
-- This is the opposite of Uniswap where LPs earn fees directly
-- **Flywheel:** Pools generating most fees → attract most votes → get most emissions → attract more LPs → deeper liquidity → more fees
-
-### Aerodrome Swap (Router Interface)
 ```solidity
-// Aerodrome Router: 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43 (Base)
-struct Route {
-    address from;
-    address to;
-    bool stable;       // true = stable pair (like Curve), false = volatile (like Uni V2)
-    address factory;   // 0x420DD381b31aEf6683db6B902084cB0FFECe40Da
+struct SealedOrder {
+    address trader;
+    euint64 amountIn;
+    euint64 minAmountOut;
+    address tokenIn;
+    address tokenOut;
 }
 
-// Swap via Router
-function swapExactTokensForTokens(
-    uint256 amountIn,
-    uint256 amountOutMin,
-    Route[] calldata routes,
-    address to,
-    uint256 deadline
-) external returns (uint256[] memory amounts);
+function submitOrder(
+    address tokenIn,
+    address tokenOut,
+    externalEuint64 amountIn,
+    externalEuint64 minAmountOut,
+    bytes calldata proof
+) external {
+    euint64 amt = FHE.fromExternal(amountIn, proof);
+    euint64 minOut = FHE.fromExternal(minAmountOut, proof);
+
+    // Store encrypted order — nobody can see the amounts
+    orders[nextOrderId] = SealedOrder({
+        trader: msg.sender,
+        amountIn: amt,
+        minAmountOut: minOut,
+        tokenIn: tokenIn,
+        tokenOut: tokenOut
+    });
+
+    FHE.allowThis(amt);
+    FHE.allowThis(minOut);
+    // Don't allow others — order amounts are private until execution
+}
 ```
 
-### Base-Specific Patterns
-- **Coinbase Smart Wallet** — ERC-4337 wallet, passkey auth, gasless txs via Coinbase paymaster
-- **OnchainKit** — `npm create onchain` to bootstrap a Base app with React components
-- **Farcaster Frames v2** — mini-apps embedded in social posts that trigger onchain actions
-- **AgentKit** — Coinbase's framework for AI agents to interact onchain
+### Pattern 3: Confidential Lending
 
-## Building on Arbitrum (Highest DeFi Liquidity)
+Loan amounts and collateral ratios stay encrypted:
 
-### GMX V2 — How GM Pools Work
-- **Each market has its own isolated pool** (unlike V1's single GLP pool)
-- LPs deposit into GM (liquidity) pools → receive GM tokens
-- **Fully Backed markets:** ETH/USD backed by ETH + USDC. Backing tokens match the traded asset.
-- **Synthetic markets:** DOGE/USD backed by ETH + USDC. Uses ADL (Auto-Deleveraging) when thresholds are reached.
-- LPs earn: trading fees, liquidation fees, borrowing fees, swap fees. But bear risk from trader PnL.
+```solidity
+function borrow(
+    externalEuint64 collateralAmount,
+    externalEuint64 borrowAmount,
+    bytes calldata proof
+) external {
+    euint64 collateral = FHE.fromExternal(collateralAmount, proof);
+    euint64 borrow = FHE.fromExternal(borrowAmount, proof);
 
-### Pendle — Yield Tokenization
-Pendle splits yield-bearing assets into principal and yield components:
+    // Check collateral ratio (encrypted comparison)
+    // collateral * price >= borrow * ratio
+    euint64 collateralValue = FHE.mul(collateral, oraclePrice);
+    euint64 requiredCollateral = FHE.mul(borrow, COLLATERAL_RATIO);
+    ebool sufficient = FHE.ge(collateralValue, requiredCollateral);
 
-1. **SY (Standardized Yield):** Wraps any yield-bearing asset. E.g., wstETH → SY-wstETH.
-2. **PT (Principal Token):** The principal. Redeemable 1:1 at maturity. Trades at a discount (discount = implied yield).
-3. **YT (Yield Token):** All yield until maturity. Value decays to 0 at maturity.
-4. **Core invariant:** `SY_value = PT_value + YT_value`
+    // If insufficient, borrow 0 (silent failure — privacy preserving)
+    euint64 actualBorrow = FHE.select(sufficient, borrow, FHE.asEuint64(0));
 
-**Use cases:**
-- Buy PT at discount = **lock in fixed yield** (like a zero-coupon bond)
-- Buy YT = **leverage your yield exposure** (bet yield goes up)
-- LP in Pendle pools = earn trading fees + PENDLE incentives
+    // Update state...
+    FHE.allowThis(actualBorrow);
+    FHE.allow(actualBorrow, msg.sender);
+}
+```
 
-### Arbitrum-Specific Tech
-- **Stylus:** Write smart contracts in Rust/C++/WASM alongside EVM (10-100x gas savings for compute-heavy operations)
-- **Orbit:** Launch custom L3 chains (47 live on mainnet)
+---
 
-See `addresses/SKILL.md` for all verified protocol addresses (GMX, Pendle, Camelot, Aerodrome, Velodrome, SyncSwap, Morpho).
+## The Wrap/Unwrap Boundary
 
-## Discovery Resources
+Every confidential DeFi system interfaces with the plaintext world at two points:
 
-- **DeFi Llama:** https://defillama.com — TVL rankings, yield rankings, all chains
-- **Dune Analytics:** https://dune.com — query onchain data
-- **ethereum.org/en/dapps/** — curated list
+### Wrapping (Plaintext → Encrypted)
 
-## Guardrails for Composability
+Simple — user sends plaintext tokens, contract encrypts them:
 
-- **Every protocol you compose with is a dependency.** If Aave gets hacked, your vault depending on Aave is affected.
-- **Oracle manipulation = exploits.** Verify oracle sources.
-- **Impermanent loss** is real for AMM LPs. Quantify it before providing liquidity.
-- **The interaction between two safe contracts can create unsafe behavior.** Audit compositions.
-- **Start with small amounts.** Test with minimal value before scaling.
-- **Flash loan attacks** can manipulate prices within a single transaction. Design for this.
+```solidity
+function wrap(uint256 amount) external {
+    // 1. Take plaintext tokens
+    SafeERC20.safeTransferFrom(underlying, msg.sender, address(this), amount);
+    // 2. Mint encrypted equivalent
+    _mint(msg.sender, FHE.asEuint64(uint64(amount)));
+}
+```
+
+### Unwrapping (Encrypted → Plaintext)
+
+Complex — requires async decryption through the coprocessor:
+
+```
+1. User requests unwrap with encrypted amount
+2. Contract requests decryption from coprocessor
+3. Wait for coprocessor callback (async — not instant)
+4. Callback receives plaintext amount
+5. Contract transfers plaintext tokens to user
+```
+
+**This is the most error-prone part of confidential DeFi.** The async decryption means unwrapping is NOT atomic — it spans multiple transactions.
+
+---
+
+## Composing with Existing DeFi
+
+You generally **cannot** directly compose encrypted contracts with existing plaintext DeFi protocols (Uniswap, Aave, etc.). The boundary looks like:
+
+```
+Confidential Layer          │  Plaintext Layer
+                            │
+cUSDC ──[unwrap]──→         │  ──→ USDC ──→ Uniswap swap
+                            │
+Uniswap output ──→          │  ──→ WETH ──[wrap]──→ cWETH
+```
+
+To compose:
+1. **Unwrap** encrypted tokens to plaintext (async decryption)
+2. **Interact** with plaintext DeFi (Uniswap, Aave, etc.)
+3. **Wrap** the result back to encrypted
+
+**This is intentional** — the whole point is that the confidential layer keeps balances private. Mixing with plaintext DeFi would leak information.
+
+---
+
+## OpenZeppelin Confidential Contracts
+
+**Always check here first** before building from scratch:
+
+**Repository:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
+
+Available implementations:
+- **ERC-7984** — Confidential wrapped tokens
+- **Confidential ERC-20** — Private token transfers
+- **Confidential voting** — Private governance
+- **Confidential auctions** — Sealed-bid patterns
+
+```bash
+npm install @openzeppelin/confidential-contracts
+```
+
+---
+
+## Guardrails
+
+- **ACL on every state update** — the #1 bug. See `acl/SKILL.md`
+- **FHE operations cost gas** — more operations = more FHE gas. See `gas/SKILL.md`
+- **Decryption is async** — unwrapping is not atomic. Handle the callback correctly
+- **Trivial encryption is not private** — `FHE.asEuint64(100)` is visible onchain. Only `FHE.fromExternal()` is truly encrypted
+- **Encrypted math wraps around** — euint64 overflow wraps modularly, doesn't revert
+- **Use the smallest type** — euint8 is cheaper than euint64 for small values

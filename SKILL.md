@@ -99,6 +99,44 @@ Converting existing Solidity contracts to use FHE for selective encryption.
 - Add ACL grants after every state update. Add `externalEuint64` + `inputProof` to function signatures.
 - Events can't contain encrypted values directly — emit metadata (addresses, timestamps) without amounts.
 
+### [FHE Gas](https://fheskills.com/gas/SKILL.md)
+FHE operation costs in Homomorphic Complexity Units (HCU). Critical for optimization.
+- Per-transaction limit: 20,000,000 HCU global, 5,000,000 HCU depth. Exceed either and the tx reverts.
+- euint64 `add` costs 162,000 HCU. `mul` costs 596,000 HCU. Use scalar operations (one plaintext operand) to save ~20-40%.
+- Smaller types are cheaper: euint8 `add` = 88K vs euint64 `add` = 162K vs euint128 `add` = 259K HCU.
+- euint256 only supports bitwise, shift, and comparison — no arithmetic.
+
+### [Building Blocks](https://fheskills.com/building-blocks/SKILL.md)
+Confidential DeFi composability — ERC-7984 wrapped tokens, encrypted vaults, sealed orders.
+- Don't build a confidential ERC-20 from scratch — Zama deploys official wrappers (cUSDC, cUSDT, cWETH).
+- ERC-7984 is the standard for wrapping ERC-20 tokens into confidential versions.
+- Encrypted contracts can't directly compose with plaintext DeFi (Uniswap, Aave). Wrap/unwrap at the boundary.
+- OpenZeppelin Confidential Contracts has production-ready implementations.
+
+### [Frontend UX](https://fheskills.com/frontend-ux/SKILL.md)
+UX patterns for confidential dApps — encryption flows, the 3 decryption types, signature caching.
+- Three decryption types: public decrypt (reveal), user decrypt (private), delegate decrypt (on behalf of user).
+- Buttons need 6 states: idle → encrypting → confirming → pending → decrypting → complete.
+- Cache EIP-712 signatures to avoid repeated wallet popups. Clear on disconnect.
+- XSS can steal cached signatures → steal private balances. CSP headers are mandatory.
+
+### [Production Ready](https://fheskills.com/production-ready/SKILL.md)
+The final checklist before going live with an FHEVM dApp.
+- Smart contracts: ACL mastery, no `if` on encrypted values, FHE gas monitoring, minimize operations.
+- Frontend: handle all 3 decryption types, key management, proper button states.
+- Templates: `fhevm-hardhat-template` for contracts, `fhevm-react-template` for full-stack.
+- For extensions: create a backend proxy for encryption/decryption, don't run SDK in extension directly.
+
+### Ethskills Integration
+These skills are adapted from [ethskills](https://ethskills.com) and provide foundational Ethereum knowledge:
+- **[Concepts](https://fheskills.com/concepts/SKILL.md)** — "Nothing is automatic," incentive design, state machines
+- **[Standards](https://fheskills.com/standards/SKILL.md)** — ERC-20, ERC-721, ERC-7984, ERC-4337, ERC-8004
+- **[L2s](https://fheskills.com/l2s/SKILL.md)** — Layer 2 landscape, chain selection
+- **[Wallets](https://fheskills.com/wallets/SKILL.md)** — EOAs, smart wallets, multisig, account abstraction
+- **[Indexing](https://fheskills.com/indexing/SKILL.md)** — Events, The Graph, querying onchain data
+- **[Audit](https://fheskills.com/audit/SKILL.md)** — 500+ item security audit system across 19 domains
+- **[Frontend Playbook](https://fheskills.com/frontend-playbook/SKILL.md)** — IPFS deployment, Vercel config, ENS subdomains
+
 ---
 
 ## What to Fetch by Task
@@ -106,10 +144,13 @@ Converting existing Solidity contracts to use FHE for selective encryption.
 | I'm doing... | Fetch these skills |
 |--------------|-------------------|
 | First time with FHEVM | `ship/`, `concepts/` |
-| Writing encrypted contracts | `fhevm/`, `acl/`, `security/` |
-| Building a confidential token | `patterns/`, `fhevm/`, `acl/` |
+| Writing encrypted contracts | `fhevm/`, `acl/`, `security/`, `gas/` |
+| Building a confidential token | `patterns/`, `building-blocks/`, `acl/` |
 | Testing encrypted contracts | `testing/` |
-| Building a frontend | `frontend/`, `tools/` |
-| Deploying to production | `deployment/`, `addresses/` |
+| Building a frontend | `frontend-ux/`, `frontend/`, `tools/` |
+| Deploying to production | `production-ready/`, `deployment/`, `addresses/` |
 | Adding privacy to existing contracts | `migration/`, `fhevm/`, `acl/` |
-| Reviewing for security | `security/`, `acl/` |
+| Reviewing for security | `security/`, `acl/`, `audit/` |
+| Optimizing FHE gas | `gas/` |
+| Composing with existing DeFi | `building-blocks/`, `addresses/` |
+| Starting a new project | `production-ready/` (has templates) |

@@ -13,6 +13,10 @@ description: Testing encrypted contracts with Hardhat and the FHEVM plugin. How 
 
 **You only tested the happy path.** FHE contracts silently handle failures (via `FHE.select`). If a transfer fails because of insufficient balance, it transfers 0 — it doesn't revert. You need to verify the zero-transfer case explicitly.
 
+**You test getters and trivial functions.** Testing that `name()` returns the name is worthless. Test edge cases, failure modes, and ACL correctness — the things that break silently with FHE.
+
+**You write tests that mirror the implementation.** Testing that `deposit(100)` sets the balance to 100 is tautological. Test *properties*: "after deposit and withdraw, user gets their tokens back." Test *invariants*: "total minted always equals sum of all encrypted balances."
+
 ---
 
 ## Setup
@@ -266,8 +270,95 @@ it("should handle uninitialized balance", async function () {
 - **FHE math correctness** — `FHE.add(3, 4)` returning 7 is Zama's responsibility, not yours
 - **Coprocessor internals** — you're testing your contract logic, not the FHE engine
 - **ACL contract internals** — test that YOUR permissions are set correctly, not that the ACL contract works
+- **OpenZeppelin internals** — don't test that `ERC20.transfer` works. They already tested it
+- **Solidity language features** — don't test that `require` reverts or that `mapping` stores values
+- **Every getter** — if `name()` returns the name you passed to the constructor, that's a tautology, not a test
 
-**DO test:** your contract's logic, ACL grants, edge cases, silent failure paths, and state transitions.
+**DO test:** your contract's logic, ACL grants, edge cases, silent failure paths, state transitions, and access control boundaries.
+
+---
+
+## Testing Strategies Beyond Unit Tests
+
+### Property-Based Testing
+
+Instead of testing specific values, test *properties* that must always hold:
+
+```typescript
+it("should preserve total supply across transfers", async function () {
+  // Property: sum of all balances always equals total minted
+  await contract.mint(1000n);
+
+  // Transfer various amounts
+  const amounts = [100n, 200n, 300n];
+  for (const amt of amounts) {
+    const input = fhevm.createEncryptedInput(
+      await contract.getAddress(), alice.address
+    );
+    input.add64(amt);
+    const encrypted = await input.encrypt();
+    await contract.transfer(bob.address, encrypted.handles[0], encrypted.inputProof);
+  }
+
+  // Property check: alice + bob = total minted
+  const aliceBal = await fhevm.decrypt64(await contract.balanceOf(alice.address));
+  const bobBal = await fhevm.decrypt64(await contract.balanceOf(bob.address));
+  expect(aliceBal + bobBal).to.equal(1000n);
+});
+```
+
+### Access Control Testing
+
+Every privileged function must be tested with unauthorized callers:
+
+```typescript
+it("should revert when non-owner calls mint", async function () {
+  await expect(
+    contract.connect(bob).mint(1000n)
+  ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
+});
+
+it("should revert when non-owner calls admin functions", async function () {
+  await expect(
+    contract.connect(bob).pause()
+  ).to.be.reverted;
+});
+```
+
+### Sequential State Testing
+
+FHE contracts often have complex state transitions. Test sequences, not just single operations:
+
+```typescript
+it("should handle rapid sequential transfers correctly", async function () {
+  await contract.mint(1000n);
+
+  // Transfer A→B, then B→C, then C→A
+  for (const [from, to, amount] of [
+    [alice, bob, 300n],
+    [bob, charlie, 150n],
+    [charlie, alice, 50n],
+  ]) {
+    const input = fhevm.createEncryptedInput(
+      await contract.getAddress(), from.address
+    );
+    input.add64(amount);
+    const encrypted = await input.encrypt();
+    await contract.connect(from).transfer(
+      to.address, encrypted.handles[0], encrypted.inputProof
+    );
+  }
+
+  // Verify final balances
+  const aliceBal = await fhevm.decrypt64(await contract.balanceOf(alice.address));
+  const bobBal = await fhevm.decrypt64(await contract.balanceOf(bob.address));
+  const charlieBal = await fhevm.decrypt64(await contract.balanceOf(charlie.address));
+
+  expect(aliceBal).to.equal(750n);  // 1000 - 300 + 50
+  expect(bobBal).to.equal(150n);    // 300 - 150
+  expect(charlieBal).to.equal(100n); // 150 - 50
+});
+```
 
 ---
 
@@ -276,7 +367,13 @@ it("should handle uninitialized balance", async function () {
 - [ ] Happy path: basic operations with valid inputs
 - [ ] Insufficient balance: verify silent 0-transfer (no revert)
 - [ ] Zero values: transfer 0, deposit 0, etc.
-- [ ] ACL: owner can decrypt, recipient gets access, unauthorized can't decrypt
+- [ ] Max values: transfer max euint64 value
+- [ ] ACL: owner can decrypt, recipient gets access after transfer
+- [ ] ACL: contract can operate on its own stored values (allowThis)
+- [ ] Access control: unauthorized callers revert on privileged functions
 - [ ] Uninitialized values: operations on addresses that haven't interacted
 - [ ] Multiple operations: sequential transfers, multiple votes, etc.
+- [ ] Self-transfer: transferring to yourself
 - [ ] Input validation: `FHE.fromExternal()` with valid proofs
+- [ ] Property tests: invariants hold across sequences of operations
+- [ ] Events: correct events emitted (addresses only, no encrypted values)

@@ -1,461 +1,395 @@
 ---
 name: frontend-ux
-description: Frontend UX rules for Ethereum dApps that prevent the most common AI agent UI bugs. Mandatory patterns for onchain buttons, token approval flows, address display, USD values, RPC configuration, and pre-publish metadata. Built around Scaffold-ETH 2 but the patterns apply to any Ethereum frontend. Use when building any dApp frontend.
+description: Frontend UX patterns for confidential dApps. Encryption flows, the three decryption types, button states for async FHE operations, signature caching, XSS prevention, and how to display encrypted data. Use when building any frontend that interacts with FHEVM contracts.
 ---
 
-# Frontend UX Rules
+# Frontend UX for Confidential dApps
 
 ## What You Probably Got Wrong
 
-**"The button works."** Working is not the standard. Does it disable during the transaction? Does it show a spinner? Does it stay disabled until the chain confirms? Does it show an error if the user rejects? AI agents skip all of this, every time.
+**You don't know the three decryption types.** There are three distinct ways to decrypt values in FHEVM. Each has different UX, different security implications, and different API calls:
+1. **Public decrypt** (preferred term: "reveal public value") — anyone can read
+2. **User decrypt** (preferred term: "decrypt") — only the authorized user
+3. **Delegate decrypt** (preferred term: "decrypt on behalf of user") — a third party decrypts for the user
 
-**"I used wagmi hooks."** Wrong hooks. Scaffold-ETH 2 wraps wagmi with `useTransactor` which **waits for transaction confirmation** — not just wallet signing. Raw wagmi's `writeContractAsync` resolves the moment the user clicks Confirm in MetaMask, BEFORE the tx is mined. Your button re-enables while the transaction is still pending.
+**You displayed encrypted handles as values.** Encrypted return values are opaque handles (`0x1a2b3c...`). Displaying them is meaningless. You must decrypt first — and decryption is async.
 
-**"I showed the address."** As raw hex? That's not showing it. `<Address/>` gives you ENS resolution, blockie avatars, copy-to-clipboard, and block explorer links. Raw `0x1234...5678` is unacceptable.
+**You forgot the encrypting state.** FHE frontends have MORE loading states than regular dApps. Between "user clicks Transfer" and "transaction confirms," there's a new step: encrypting the input client-side. Your button needs to show "Encrypting..." before "Confirm in wallet..."
+
+**You didn't cache signatures.** Every decryption requires an EIP-712 signature from the user. Without caching, users get a wallet popup on EVERY balance read. This destroys UX.
+
+**You're vulnerable to XSS.** If an attacker injects JavaScript, they can steal cached signatures and decrypt the user's private balances. Signature/key storage is a critical security surface.
 
 ---
 
-## Rule 1: Every Onchain Button — Loader + Disable
+## Starting a New Frontend Project
 
-> ⚠️ **THIS IS THE #1 BUG AI AGENTS SHIP.** The user clicks Approve, signs in their wallet, comes back to the app, and the Approve button is clickable again — so they click it again, send a duplicate transaction, and now two approvals are pending. **The button MUST be disabled and show a spinner from the moment they click until the transaction confirms onchain.** Not until the wallet closes. Not until the signature is sent. Until the BLOCK CONFIRMS.
+**Always start with the official template:**
 
-ANY button that triggers a blockchain transaction MUST:
-1. **Disable immediately** on click
-2. **Show a spinner** ("Approving...", "Staking...", etc.)
-3. **Stay disabled** until the state update confirms the action completed
-4. **Show success/error feedback** when done
+```bash
+# Full React frontend with relayer-sdk integration
+git clone https://github.com/zama-ai/fhevm-react-template
+cd fhevm-react-template
+npm install
+```
+
+If you already have a project and just need the SDK:
+```bash
+npm install @anthropic-ai/relayer-sdk  # Check https://github.com/zama-ai/relayer-sdk for latest
+```
+
+**For extensions/plugins:** The current relayer-sdk has issues with non-browser environments. If building a browser extension or Node.js service, create a backend that proxies encryption/decryption requests.
+
+---
+
+## The Three Decryption Types
+
+### 1. Public Decrypt (Reveal Public Value)
+
+The decrypted value becomes public — readable by anyone. Used for auction results, vote tallies, game outcomes.
 
 ```typescript
-// ✅ CORRECT: Separate loading state PER ACTION
-const [isApproving, setIsApproving] = useState(false);
-const [isStaking, setIsStaking] = useState(false);
+// Contract side
+function revealWinner() external {
+    require(block.timestamp >= auctionEnd, "Not yet");
+    FHE.makePubliclyDecryptable(winningBid);
+    // Value will be readable by anyone after coprocessor processes it
+}
+
+// Frontend side
+const publicValue = await contract.getRevealedValue();
+// This is a plaintext uint64 — display directly
+<span>Winning bid: {formatUnits(publicValue, 6)} USDC</span>
+```
+
+**UX:** Show "Revealing..." while waiting for coprocessor. Once revealed, display the value normally — no user signature needed.
+
+### 2. User Decrypt (Decrypt)
+
+Only the authorized user can decrypt their own values. Used for private balances, personal positions.
+
+```typescript
+// Read encrypted handle from contract
+const encryptedBalance = await contract.balanceOf(userAddress);
+
+// Decrypt using user's permission (requires EIP-712 signature)
+const balance = await fhevm.decrypt(contractAddress, encryptedBalance);
+// balance is a BigInt — display it
+<span>Your balance: {formatUnits(balance, 6)} cUSDC</span>
+```
+
+**UX:** Requires wallet signature on first decrypt. Cache the signature to avoid repeated popups.
+
+### 3. Delegate Decrypt (Decrypt on Behalf of User)
+
+A third party (another contract or service) decrypts on behalf of the user. Used when a protocol needs to read a user's encrypted value to perform an action.
+
+```solidity
+// Contract grants delegate access
+FHE.allow(balances[user], delegateAddress);
+```
+
+**UX:** The user must explicitly grant delegation. Show a clear confirmation: "Allow [Protocol] to read your balance?"
+
+---
+
+## Button States for Encrypted Operations
+
+Every encrypted transaction has MORE states than a regular onchain button:
+
+```typescript
+type FHEButtonState =
+  | "idle"           // Ready to click
+  | "encrypting"     // Encrypting input client-side (fhevmjs)
+  | "confirming"     // Waiting for wallet signature
+  | "pending"        // Transaction submitted, waiting for confirmation
+  | "decrypting"     // Fetching + decrypting updated values
+  | "complete";      // Done
+
+function getButtonText(state: FHEButtonState): string {
+  switch (state) {
+    case "encrypting": return "Encrypting...";
+    case "confirming": return "Confirm in wallet...";
+    case "pending": return "Transaction pending...";
+    case "decrypting": return "Updating balance...";
+    case "complete": return "Done!";
+    default: return "Transfer";
+  }
+}
+```
+
+### Full Button Implementation
+
+```tsx
+const [state, setState] = useState<FHEButtonState>("idle");
 
 <button
-  disabled={isApproving}
+  disabled={state !== "idle"}
   onClick={async () => {
-    setIsApproving(true);
     try {
-      await writeContractAsync({ functionName: "approve", args: [...] });
+      // Step 1: Encrypt
+      setState("encrypting");
+      const input = fhevm.createEncryptedInput(contractAddress, userAddress);
+      input.add64(amount);
+      const encrypted = await input.encrypt();
+
+      // Step 2: Submit transaction
+      setState("confirming");
+      const tx = await contract.transfer(
+        recipient,
+        encrypted.handles[0],
+        encrypted.inputProof
+      );
+
+      // Step 3: Wait for confirmation
+      setState("pending");
+      await tx.wait();
+
+      // Step 4: Refresh encrypted balance
+      setState("decrypting");
+      const newBalance = await contract.balanceOf(userAddress);
+      const decrypted = await fhevm.decrypt(contractAddress, newBalance);
+      setBalance(decrypted);
+
+      setState("complete");
+      setTimeout(() => setState("idle"), 2000);
     } catch (e) {
       console.error(e);
-      notification.error("Approval failed");
-    } finally {
-      setIsApproving(false);
+      setState("idle");
+      // Show error to user
     }
   }}
 >
-  {isApproving ? "Approving..." : "Approve"}
+  {getButtonText(state)}
 </button>
 ```
 
-**❌ NEVER use a single shared `isLoading` for multiple buttons.** Each button gets its own loading state. A shared state causes the WRONG loading text to appear when UI conditionally switches between buttons.
-
-### Scaffold Hooks Only — Never Raw Wagmi
-
-```typescript
-// ❌ WRONG: Raw wagmi — resolves after signing, not confirmation
-const { writeContractAsync } = useWriteContract();
-await writeContractAsync({...}); // Returns immediately after MetaMask signs!
-
-// ✅ CORRECT: Scaffold hooks — waits for tx to be mined
-const { writeContractAsync } = useScaffoldWriteContract("MyContract");
-await writeContractAsync({...}); // Waits for actual onchain confirmation
-```
-
-**Why:** `useScaffoldWriteContract` uses `useTransactor` internally, which waits for block confirmation. Raw wagmi doesn't — your UI will show "success" while the transaction is still in the mempool.
+**Critical:** Each button gets its own state. Never share loading state across buttons.
 
 ---
 
-## Rule 2: Four-State Flow — Connect → Network → Approve → Action
+## Displaying Encrypted Data
 
-When a user needs to interact with the app, there are FOUR states. Show exactly ONE big, obvious button at a time:
+### Balance Display Component
 
+```tsx
+function ConfidentialBalance({ contractAddress, userAddress }) {
+  const [balance, setBalance] = useState<bigint | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchBalance() {
+      setLoading(true);
+      try {
+        const handle = await contract.balanceOf(userAddress);
+        const decrypted = await fhevm.decrypt(contractAddress, handle);
+        setBalance(decrypted);
+      } catch (err) {
+        // User may not have ACL permission
+        setError("Unable to decrypt");
+        setBalance(null);
+      }
+      setLoading(false);
+    }
+    fetchBalance();
+  }, [userAddress]);
+
+  if (loading) return <span className="animate-pulse">Decrypting...</span>;
+  if (error) return <span className="text-gray-400">Hidden</span>;
+  return <span>{formatUnits(balance!, 6)} cUSDC</span>;
+}
 ```
-1. Not connected?       → Big "Connect Wallet" button (NOT text saying "connect your wallet to play")
-2. Wrong network?       → Big "Switch to Base" button
-3. Not enough approved? → "Approve" button (with loader per Rule 1)
-4. Enough approved?     → "Stake" / "Deposit" / action button
-```
 
-> **NEVER show a text prompt like "Connect your wallet to play" or "Please connect to continue."** Show a button. The user should always have exactly one thing to click.
+**Rules:**
+- Show "Decrypting..." while waiting for KMS response (not a number, not 0)
+- Show "Hidden" if the user doesn't have ACL permission
+- Never show raw handles — they're meaningless hex
+- Cache decrypted values to avoid repeated KMS calls
+
+### What Users Can and Cannot See
+
+| Data | Visible to everyone | Visible to authorized user |
+|------|--------------------|-----------------------------|
+| Transaction sender/recipient | Yes | Yes |
+| Function called | Yes | Yes |
+| Encrypted input handles | Yes (meaningless) | Yes (can decrypt) |
+| Encrypted balances | No | Yes (with signature) |
+| Transfer amounts | No | Sender and recipient only |
+| Total supply (if plaintext) | Yes | Yes |
+
+---
+
+## Signature Caching (Critical UX)
+
+Without caching, every `fhevm.decrypt()` call triggers a wallet popup. For a page showing 3 balances, that's 3 MetaMask popups on load.
 
 ```typescript
-const { data: allowance } = useScaffoldReadContract({
-  contractName: "Token",
-  functionName: "allowance",
-  args: [address, contractAddress],
+// Cache the EIP-712 signature for the session
+let cachedSignature: string | null = null;
+
+async function getOrCacheSignature(contractAddress: string, userAddress: string) {
+  if (cachedSignature) return cachedSignature;
+
+  // This triggers the wallet popup
+  const signature = await fhevm.generateSignature(contractAddress, userAddress);
+  cachedSignature = signature;
+  return signature;
+}
+
+// Now all decryptions in the session use the cached signature
+const balance = await fhevm.decrypt(contractAddress, handle, {
+  signature: await getOrCacheSignature(contractAddress, userAddress),
+});
+```
+
+**Storage options:**
+- **Session memory** (recommended) — lost on page reload, most secure
+- **sessionStorage** — persists across page refreshes, cleared on tab close
+- **Never localStorage** — survives tab close, XSS attack surface
+
+---
+
+## XSS Prevention (Critical Security)
+
+Cached signatures are high-value targets. If an attacker injects JavaScript:
+1. They read your cached signature from memory/storage
+2. They call `fhevm.decrypt()` with your signature
+3. They see all your private balances
+
+**Mitigations:**
+- **Content Security Policy** — strict CSP headers blocking inline scripts
+- **No `eval()` or `innerHTML`** — standard React/Next.js already handles this
+- **Sanitize all user inputs** — especially if rendering user-submitted content
+- **Store signatures in memory, not DOM** — don't put them in data attributes or hidden inputs
+- **Clear signatures on disconnect** — when user disconnects wallet, clear the cache
+
+```typescript
+// Clear cache on wallet disconnect
+useEffect(() => {
+  if (!isConnected) {
+    cachedSignature = null;
+  }
+}, [isConnected]);
+```
+
+---
+
+## Client-Side Encryption
+
+### Creating Encrypted Inputs
+
+```typescript
+import { createInstance } from "fhevmjs";
+
+// Initialize once at app startup
+const fhevm = await createInstance({
+  networkUrl: rpcUrl,
+  gatewayUrl: "https://gateway.zama.ai",
 });
 
-const needsApproval = !allowance || allowance < amount;
-const wrongNetwork = chain?.id !== targetChainId;
-const notConnected = !address;
+// Encrypt a value for a specific contract
+const input = fhevm.createEncryptedInput(contractAddress, userAddress);
+input.add64(1000n);  // Encrypt 1000 as euint64
+const encrypted = await input.encrypt();
 
-{notConnected ? (
-  <RainbowKitCustomConnectButton />  // Big connect button — NOT text
-) : wrongNetwork ? (
-  <button onClick={switchNetwork} disabled={isSwitching}>
-    {isSwitching ? "Switching..." : "Switch to Base"}
-  </button>
-) : needsApproval ? (
-  <button onClick={handleApprove} disabled={isApproving}>
-    {isApproving ? "Approving..." : "Approve $TOKEN"}
-  </button>
-) : (
-  <button onClick={handleStake} disabled={isStaking}>
-    {isStaking ? "Staking..." : "Stake"}
-  </button>
-)}
+// Submit to contract
+await contract.transfer(
+  recipient,
+  encrypted.handles[0],    // externalEuint64
+  encrypted.inputProof     // ZK proof
+);
 ```
 
-**Critical details:**
-- Always read allowance via a hook so the UI updates automatically when the approval tx confirms
-- Never rely on local state alone for allowance tracking
-- Wrong network check comes FIRST — if the user clicks Approve while on the wrong network, everything breaks
-- **Never show Approve and Action simultaneously** — one button at a time
+### Multiple Encrypted Values
+
+```typescript
+const input = fhevm.createEncryptedInput(contractAddress, userAddress);
+input.addBool(true);     // index 0
+input.add64(500n);       // index 1
+input.add8(3);           // index 2
+const encrypted = await input.encrypt();
+
+await contract.multiInput(
+  encrypted.handles[0],  // externalEbool
+  encrypted.handles[1],  // externalEuint64
+  encrypted.handles[2],  // externalEuint8
+  encrypted.inputProof   // single proof for all
+);
+```
 
 ---
 
-## Rule 3: Address Display — Always `<Address/>`
+## Transaction Flow (Complete)
 
-**EVERY time you display an Ethereum address**, use scaffold-eth's `<Address/>` component:
+```
+1. User enters amount (plaintext in the UI)
+2. User clicks "Transfer"
+3. → "Encrypting..." — fhevmjs encrypts client-side
+4. → "Confirm in wallet..." — MetaMask popup
+5. → "Transaction pending..." — waiting for block confirmation
+6. → After confirm, re-fetch encrypted balance from contract
+7. → "Decrypting..." — KMS decryption with cached signature
+8. → Display updated balance
+```
+
+---
+
+## Common Mistakes
+
+### Displaying Raw Handles
+
+```tsx
+// ❌ WRONG — meaningless hex
+<span>Balance: {encryptedBalance.toString()}</span>
+
+// ✅ CORRECT — decrypt first
+const decrypted = await fhevm.decrypt(contractAddr, encryptedBalance);
+<span>Balance: {formatUnits(decrypted, 6)}</span>
+```
+
+### No Loading State for Decryption
+
+```tsx
+// ❌ WRONG — shows 0 while decrypting
+<span>Balance: {balance || 0}</span>
+
+// ✅ CORRECT — explicit loading
+{isDecrypting ? <Spinner /> : <span>{formatBalance(balance)}</span>}
+```
+
+### Assuming Instant Decryption
 
 ```typescript
-import { Address } from "~~/components/scaffold-eth";
+// ❌ WRONG — missing await
+const balance = fhevm.decrypt(addr, handle);
 
 // ✅ CORRECT
-<Address address={userAddress} />
-
-// ❌ WRONG — never render raw hex
-<span>{userAddress}</span>
-<p>0x1234...5678</p>
+const balance = await fhevm.decrypt(addr, handle);
 ```
 
-`<Address/>` handles ENS resolution, blockie avatars, copy-to-clipboard, truncation, and block explorer links. Raw hex is unacceptable.
-
-### Address Input — Always `<AddressInput/>`
-
-**EVERY time the user needs to enter an Ethereum address**, use `<AddressInput/>`:
+### Forgetting to Refresh After Transaction
 
 ```typescript
-import { AddressInput } from "~~/components/scaffold-eth";
+// ❌ WRONG — stale balance after transfer
+await contract.transfer(...);
+// Balance display still shows old value
 
-// ✅ CORRECT
-<AddressInput value={recipient} onChange={setRecipient} placeholder="Recipient address" />
-
-// ❌ WRONG — never use a raw text input for addresses
-<input type="text" value={recipient} onChange={e => setRecipient(e.target.value)} />
-```
-
-`<AddressInput/>` provides ENS resolution (type "vitalik.eth" → resolves to address), blockie avatar preview, validation, and paste handling.
-
-**The pair: `<Address/>` for DISPLAY, `<AddressInput/>` for INPUT. Always.**
-
-### Show Your Contract Address
-
-**Every dApp should display its deployed contract address** at the bottom of the main page using `<Address/>`. Users want to verify the contract on a block explorer. This builds trust and is standard practice.
-
-```typescript
-<div className="text-center mt-8 text-sm opacity-70">
-  <p>Contract:</p>
-  <Address address={deployedContractAddress} />
-</div>
+// ✅ CORRECT — re-fetch and re-decrypt
+await contract.transfer(...);
+const newHandle = await contract.balanceOf(userAddress);
+const newBalance = await fhevm.decrypt(contractAddr, newHandle);
+setBalance(newBalance);
 ```
 
 ---
 
-## Rule 4: USD Values Everywhere
+## Key Management for Production
 
-**EVERY token or ETH amount displayed should include its USD value.**
-**EVERY token or ETH input should show a live USD preview.**
+For a production-ready frontend, you need to manage where and how you store decryption keys:
 
-```typescript
-// ✅ CORRECT — Display with USD
-<span>1,000 TOKEN (~$4.20)</span>
-<span>0.5 ETH (~$1,250.00)</span>
+- **Development:** In-memory signatures, cleared on page reload
+- **Staging:** sessionStorage with strict CSP
+- **Production:** Consider a secure key management service, hardware-backed storage, or delegated decryption via a trusted backend
 
-// ✅ CORRECT — Input with live USD preview
-<input value={amount} onChange={...} />
-<span className="text-sm text-gray-500">
-  ≈ ${(parseFloat(amount || "0") * tokenPrice).toFixed(2)} USD
-</span>
-
-// ❌ WRONG — Amount with no USD context
-<span>1,000 TOKEN</span>  // User has no idea what this is worth
-```
-
-**Where to get prices:**
-- **ETH price:** SE2 built-in hook — `useNativeCurrencyPrice()`
-- **Custom tokens:** DexScreener API (`https://api.dexscreener.com/latest/dex/tokens/TOKEN_ADDRESS`), onchain Uniswap quoter, or Chainlink oracle
-
-**This applies to both display AND input:**
-- Displaying a balance? Show USD next to it.
-- User entering an amount to send/stake/swap? Show live USD preview below the input.
-- Transaction confirmation? Show USD value of what they're about to do.
-
----
-
-## Rule 5: No Duplicate Titles
-
-**DO NOT put the app name as an `<h1>` at the top of the page body.** The SE2 header already displays the app name. Repeating it wastes space and looks amateur.
-
-```typescript
-// ❌ WRONG — AI agents ALWAYS do this
-<Header />  {/* Already shows "🦞 My dApp" */}
-<main>
-  <h1>🦞 My dApp</h1>  {/* DUPLICATE! Delete this. */}
-  <p>Description of the app</p>
-  ...
-</main>
-
-// ✅ CORRECT — Jump straight into content
-<Header />  {/* Shows the app name */}
-<main>
-  <div className="grid grid-cols-2 gap-4">
-    {/* Stats, balances, actions — no redundant title */}
-  </div>
-</main>
-```
-
----
-
-## Rule 6: RPC Configuration
-
-**NEVER use public RPCs** (`mainnet.base.org`, etc.) — they rate-limit and cause random failures in production.
-
-In `scaffold.config.ts`, ALWAYS set:
-```typescript
-rpcOverrides: {
-  [chains.base.id]: process.env.NEXT_PUBLIC_BASE_RPC || "https://mainnet.base.org",
-},
-pollingInterval: 3000,  // 3 seconds, not the default 30000
-```
-
-**Keep the API key in `.env.local`** — never hardcode it in config files that get committed to Git.
-
-> ⚠️ **SE2's `wagmiConfig.tsx` adds a bare `http()` (no URL) as a fallback transport.** Viem resolves bare `http()` to the chain's default public RPC (e.g. `mainnet.base.org` for Base). Even with `rpcOverrides` set in scaffold config, the public RPC **will still get hit** because viem's `fallback()` fires transports in parallel. **You must remove the bare `http()` from the fallback array in `services/web3/wagmiConfig.tsx`** so only your configured RPCs are used. If you don't, your app will spam the public RPC with every poll cycle and get 429 rate-limited in production.
-
-**Monitor RPC usage:** Sensible = 1 request every 3 seconds. If you see 15+ requests/second, you have a bug:
-- Hooks re-rendering in loops
-- Duplicate hook calls
-- Missing dependency arrays
-- `watch: true` on hooks that don't need it
-
----
-
-## Rule 7: Use DaisyUI Semantic Colors — Never Hardcode Dark Backgrounds
-
-AI agents love dark UIs and will hardcode them. This is always wrong:
-
-```tsx
-// ❌ WRONG — hardcoded black, defeats the entire DaisyUI theme system
-<div className="min-h-screen bg-[#0a0a0a] text-white">
-```
-
-**Why this is a problem:** SE2 ships with DaisyUI configured for both light and dark themes (usually via `globals.css` or `tailwind.config.ts`). It also includes a `<SwitchTheme/>` toggle in the header. When you hardcode a dark background, you break all of this:
-- Light-mode users (macOS/iOS/Windows system setting) get a black page
-- The theme toggle does nothing — the page ignores `data-theme`
-- `prefers-color-scheme: light` is silently ignored
-
-**Always use DaisyUI semantic color variables:**
-
-```tsx
-// ✅ CORRECT — responds to system preference AND the theme toggle
-<div className="min-h-screen bg-base-200 text-base-content">
-
-// DaisyUI semantic classes — use these everywhere:
-// bg-base-100   (lightest surface — cards, inputs)
-// bg-base-200   (default page background)
-// bg-base-300   (borders, dividers)
-// text-base-content   (primary text)
-// text-base-content/60  (secondary/muted text)
-```
-
-**If you genuinely want dark-only**, you must commit to it fully — don't half-do it:
-
-```tsx
-// ✅ Acceptable dark-only — but ALSO remove <SwitchTheme/> from the header
-// In app/layout.tsx:
-<html data-theme="dark">
-// AND delete <SwitchTheme /> from Header.tsx
-// Don't leave a theme toggle that does nothing
-```
-
-**Quick scan for the mistake:**
-```bash
-grep -rn 'bg-\[#0\|bg-black\|bg-gray-9\|bg-zinc-9\|bg-neutral-9\|bg-slate-9' packages/nextjs/app/
-```
-Any match on a root page wrapper → fix it.
-
----
-
-## Rule 8: Fix SE2's Pill-Shaped Form Inputs
-
-SE2's DaisyUI theme sets `--radius-field: 9999rem` — fully pill-shaped inputs. Single-line inputs look fine, but textareas, multi-line inputs, and selects look broken — text clips against the extreme border radius.
-
-AI agents never fix this. They see the DaisyUI class, assume it's correct, and ship pill-shaped textareas.
-
-**Fix it in the theme, not per-element.** In `packages/nextjs/styles/globals.css`, change both themes:
-
-```css
-/* In BOTH @plugin "daisyui/theme" blocks (light AND dark): */
-
---radius-field: 9999rem;   /* ❌ default — pill-shaped, clips textarea text */
---radius-field: 0.5rem;    /* ✅ rounded-lg equivalent — works for all form elements */
-```
-
-That's it — one line per theme, every `input`, `select`, and `textarea` inherits it globally. Do NOT add `rounded-md` to individual elements — that fights the theme system and breaks when the theme changes.
-
-**Quick check:**
-```bash
-grep "radius-field" packages/nextjs/styles/globals.css
-```
-If it says `9999rem`, fix it.
-
----
-
-## Rule 9: Contract Error Translation
-
-When a contract reverts, the user must see a human-readable explanation. Not a hex selector. Not a silent button reset. Not a console.error.
-
-**The principle:** Read your contract's ABI. Find every custom error. Map each one to plain English. Display it inline below the button that triggered it.
-
-Steps:
-1. **Extract all errors from your ABI** — your contract's custom errors AND inherited ones (OpenZeppelin, etc.)
-2. **Write a mapping function** that takes a caught error and returns a user-facing string
-3. **Include wallet-level errors** — user rejected, insufficient gas
-4. **Add a fallback** — if you can't parse it, still show *something* ("Transaction failed")
-5. **Display inline** — a persistent alert below the button, not a toast. Clear it when the user edits an input.
-
-```tsx
-// ❌ WRONG — user sees nothing
-try { await writeTx(...) }
-catch (e) { console.error(e) }
-
-// ✅ RIGHT — user sees "Insufficient token balance"
-try { await writeTx(...) }
-catch (e) { setTxError(parseContractError(e)) }
-
-// Below the button:
-{txError && (
-  <div className="mt-3 alert alert-error text-sm">
-    <span>{txError}</span>
-  </div>
-)}
-```
-
-**How to find your errors:**
-```bash
-# List all custom errors in your contract's ABI
-cat deployedContracts.ts | grep -o '"name":"[^"]*Error[^"]*"' | sort -u
-
-# Or from the Solidity source
-grep -rn 'error ' contracts/src/ | grep -v '//'
-```
-
-Every error in that list needs a human-readable string in your frontend. If you inherit OpenZeppelin, their errors (`ERC20InsufficientBalance`, `OwnableUnauthorizedAccount`, etc.) are in YOUR ABI too — don't forget them.
-
----
-
-## Rule 10: Pre-Publish Checklist
-
-**BEFORE deploying frontend to production, EVERY item must pass:**
-
-**Open Graph / Twitter Cards (REQUIRED):**
-```typescript
-// In app/layout.tsx or getMetadata.ts
-export const metadata: Metadata = {
-  title: "Your App Name",
-  description: "Description of the app",
-  openGraph: {
-    title: "Your App Name",
-    description: "Description of the app",
-    images: [{ url: "https://YOUR-LIVE-DOMAIN.com/thumbnail.png" }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Your App Name",
-    description: "Description of the app",
-    images: ["https://YOUR-LIVE-DOMAIN.com/thumbnail.png"],
-  },
-};
-```
-
-**⚠️ The OG image URL MUST be:**
-- Absolute URL starting with `https://`
-- The LIVE production domain (NOT `localhost`, NOT relative path)
-- NOT an environment variable that could be unset
-- Actually reachable (test by visiting the URL in a browser)
-
-**Remove ALL Scaffold-ETH 2 default identity:**
-- [ ] README rewritten — not the SE2 template README
-- [ ] Footer cleaned — remove BuidlGuidl links, "Fork me" link, support links, any SE2 branding. Replace with your project's repo link
-- [ ] Favicon updated — not the SE2 default
-- [ ] Tab title is your app name — not "Scaffold-ETH 2"
-
-**Full checklist:**
-- [ ] OG image URL is absolute, live production domain
-- [ ] OG title and description set (not default SE2 text)
-- [ ] Twitter card type set (`summary_large_image`)
-- [ ] All SE2 default branding removed (README, footer, favicon, tab title)
-- [ ] Browser tab title is correct
-- [ ] RPC overrides set (not public RPCs)
-- [ ] Bare `http()` removed from wagmiConfig.tsx fallback array (no silent public RPC fallback)
-- [ ] `pollingInterval` is 3000
-- [ ] All contract addresses match what's deployed
-- [ ] No hardcoded testnet/localhost values in production code
-- [ ] Every address display uses `<Address/>`
-- [ ] Every address input uses `<AddressInput/>`
-- [ ] Every onchain button has its own loader + disabled state
-- [ ] Approve flow has network check → approve → action pattern
-- [ ] No duplicate h1 title matching header
-- [ ] No hardcoded dark backgrounds — page uses `bg-base-200 text-base-content` (or dark forced + toggle removed)
-
----
-
-## externalContracts.ts — Before You Build
-
-**ALL external contracts** (tokens, protocols, anything you didn't deploy) MUST be added to `packages/nextjs/contracts/externalContracts.ts` with address and ABI BEFORE building the frontend.
-
-```typescript
-// packages/nextjs/contracts/externalContracts.ts
-export default {
-  8453: {  // Base chain ID
-    USDC: {
-      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      abi: [...],  // ERC-20 ABI
-    },
-  },
-} as const;
-```
-
-**Why BEFORE:** Scaffold hooks (`useScaffoldReadContract`, `useScaffoldWriteContract`) only work with contracts registered in `deployedContracts.ts` (auto-generated) or `externalContracts.ts` (manual). If you write frontend code referencing a contract that isn't registered, it silently fails.
-
-**Never edit `deployedContracts.ts`** — it's auto-generated by `yarn deploy`. Put your external contracts in `externalContracts.ts`.
-
----
-
-## Human-Readable Amounts
-
-Always convert between contract units and display units:
-
-```typescript
-// Contract → Display
-import { formatEther, formatUnits } from "viem";
-formatEther(weiAmount);           // 18 decimals (ETH, DAI, most tokens)
-formatUnits(usdcAmount, 6);       // 6 decimals (USDC, USDT)
-
-// Display → Contract
-import { parseEther, parseUnits } from "viem";
-parseEther("1.5");                // → 1500000000000000000n
-parseUnits("100", 6);             // → 100000000n (USDC)
-```
-
-**Never show raw wei/units to users.** `1500000000000000000` means nothing. `1.5 ETH (~$3,750)` means everything.
-
----
-
-## Resources
-
-- **SE2 Docs:** https://docs.scaffoldeth.io/
-- **UI Components:** https://ui.scaffoldeth.io/
-- **SpeedRun Ethereum:** https://speedrunethereum.com/
+See `production-ready/SKILL.md` for the full production checklist.

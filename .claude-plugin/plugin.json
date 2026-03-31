@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "The missing knowledge between AI agents and production encrypted smart contracts. FHE on Ethereum — encrypted types, ACL, patterns, security, deployment.",
   "author": {
-    "name": "Zama",
+    "name": "Zama Team",
+    "email": "plugins@zama.ai",
     "url": "https://zama.ai"
   },
   "license": "BSD-3-Clause-Clear",
@@ -80,6 +81,66 @@
       "name": "migration",
       "description": "Converting existing Solidity contracts to use FHE",
       "path": "migration/SKILL.md"
+    },
+    {
+      "name": "gas",
+      "description": "FHE gas costs (HCU) per operation and type. Optimization patterns.",
+      "path": "gas/SKILL.md"
+    },
+    {
+      "name": "building-blocks",
+      "description": "Confidential DeFi composability — ERC-7984, encrypted vaults, sealed orders",
+      "path": "building-blocks/SKILL.md"
+    },
+    {
+      "name": "frontend-ux",
+      "description": "UX patterns for confidential dApps — 3 decryption types, signature caching, button states",
+      "path": "frontend-ux/SKILL.md"
+    },
+    {
+      "name": "production-ready",
+      "description": "Final checklist for shipping production FHEVM dApps",
+      "path": "production-ready/SKILL.md"
+    },
+    {
+      "name": "concepts",
+      "description": "Mental models for onchain development — nothing is automatic, incentive design",
+      "path": "concepts/SKILL.md"
+    },
+    {
+      "name": "standards",
+      "description": "Ethereum token and protocol standards — ERC-20, ERC-721, ERC-7984, ERC-4337",
+      "path": "standards/SKILL.md"
+    },
+    {
+      "name": "l2s",
+      "description": "Ethereum L2 landscape — chain selection, deployment, costs",
+      "path": "l2s/SKILL.md"
+    },
+    {
+      "name": "wallets",
+      "description": "Ethereum wallets — EOAs, smart wallets, multisig, account abstraction",
+      "path": "wallets/SKILL.md"
+    },
+    {
+      "name": "indexing",
+      "description": "Onchain data and indexing — events, The Graph, querying",
+      "path": "indexing/SKILL.md"
+    },
+    {
+      "name": "audit",
+      "description": "Deep EVM smart contract security audit system — 500+ items across 19 domains",
+      "path": "audit/SKILL.md"
+    },
+    {
+      "name": "frontend-playbook",
+      "description": "Build-to-production pipeline — IPFS, Vercel, ENS deployment",
+      "path": "frontend-playbook/SKILL.md"
+    },
+    {
+      "name": "ship",
+      "description": "End-to-end guide from idea to deployed dApp",
+      "path": "ship/SKILL.md"
     }
   ]
 }
