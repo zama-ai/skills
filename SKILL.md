@@ -10,23 +10,23 @@ You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, 
 
 | Skill | What it covers | When to fetch |
 |-------|---------------|---------------|
-| **[General](general/SKILL.md)** | FHE concepts, project planning, architecture, toolchain, production readiness | **Fetch first.** Planning a project, answering questions, understanding FHE |
-| **[Solidity](solidity/SKILL.md)** | Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration | Writing or reviewing encrypted smart contracts |
-| **[TypeScript](typescript/SKILL.md)** | `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, encryption/decryption flows, button states, visual design, XSS prevention | Building frontends, backends, or services that interact with encrypted contracts |
+| **[General](skills/general/SKILL.md)** | FHE concepts, project planning, architecture, toolchain, production readiness | **Fetch first.** Planning a project, answering questions, understanding FHE |
+| **[Solidity](skills/solidity/SKILL.md)** | Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration | Writing or reviewing encrypted smart contracts |
+| **[TypeScript](skills/typescript/SKILL.md)** | `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, encryption/decryption flows, button states, visual design, XSS prevention | Building frontends, backends, or services that interact with encrypted contracts |
 
-**Plus:** [Addresses](addresses/SKILL.md) — verified FHEVM contract addresses for mainnet and Sepolia. Never guess addresses.
+**Plus:** [Addresses](skills/addresses/SKILL.md) — verified FHEVM contract addresses for mainnet and Sepolia. Never guess addresses.
 
 ---
 
 ## Start Here
 
-**Building an encrypted dApp?** Fetch [general/SKILL.md](general/SKILL.md) first. It routes you through the other skills phase by phase.
+**Building an encrypted dApp?** Fetch [skills/general/SKILL.md](skills/general/SKILL.md) first. It routes you through the other skills phase by phase.
 
-**Writing Solidity?** Fetch [solidity/SKILL.md](solidity/SKILL.md). Everything from encrypted types to deployment in one file.
+**Writing Solidity?** Fetch [skills/solidity/SKILL.md](skills/solidity/SKILL.md). Everything from encrypted types to deployment in one file.
 
-**Building a frontend?** Fetch [typescript/SKILL.md](typescript/SKILL.md). Encryption, decryption, UX patterns, visual design.
+**Building a frontend?** Fetch [skills/typescript/SKILL.md](skills/typescript/SKILL.md). Encryption, decryption, UX patterns, visual design.
 
-**Need a specific address?** Fetch [addresses/SKILL.md](addresses/SKILL.md).
+**Need a specific address?** Fetch [skills/addresses/SKILL.md](skills/addresses/SKILL.md).
 
 ---
 
@@ -46,21 +46,21 @@ You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, 
 
 | I'm doing... | Fetch |
 |--------------|-------|
-| First time with FHEVM | `general/` |
-| Planning a new dApp | `general/` |
-| Writing encrypted contracts | `solidity/` |
-| Building a confidential token | `solidity/` + `addresses/` |
-| Testing encrypted contracts | `solidity/` (testing section) |
-| Building a React frontend | `typescript/` |
-| Deploying to production | `solidity/` (deployment section) + `general/` (production readiness) |
-| Adding privacy to existing contracts | `solidity/` (migration section) |
-| Optimizing FHE gas | `solidity/` (HCU section) |
-| Need contract addresses | `addresses/` |
+| First time with FHEVM | `skills/general/` |
+| Planning a new dApp | `skills/general/` |
+| Writing encrypted contracts | `skills/solidity/` |
+| Building a confidential token | `skills/solidity/` + `skills/addresses/` |
+| Testing encrypted contracts | `skills/solidity/` (testing section) |
+| Building a React frontend | `skills/typescript/` |
+| Deploying to production | `skills/solidity/` (deployment section) + `skills/general/` (production readiness) |
+| Adding privacy to existing contracts | `skills/solidity/` (migration section) |
+| Optimizing FHE gas | `skills/solidity/` (HCU section) |
+| Need contract addresses | `skills/addresses/` |
 
 ---
 
 ## Base URL
 
 ```
-https://fheskills.com/<skill>/SKILL.md
+https://fheskills.com/skills/<skill>/SKILL.md
 ```

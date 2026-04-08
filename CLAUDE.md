@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **fheskills** is an external-facing skill set for AI agents building encrypted smart contracts with Zama's FHEVM (Fully Homomorphic Encryption Virtual Machine). It teaches developers how to build confidential dApps with smart contracts and frontends/backends that interact with the relayer-sdk.
 
 **Deployed at:** https://fheskills.com (planned)
-**Modeled after:** https://github.com/austintgriffith/ethskills
 **License:** BSD-3-Clause-Clear (matches Zama licensing)
 
 ## Key Terminology
@@ -231,34 +230,31 @@ Each skill is a standalone SKILL.md file in its own directory:
 
 ```
 fheskills/
-├── SKILL.md              # Router - links to all skills
-├── ship/SKILL.md         # Entry point - routes through all phases
-├── concepts/SKILL.md     # Mental models ("nothing is plaintext")
-├── fhevm/SKILL.md        # Core API - euint types, FHE operations
-├── acl/SKILL.md          # Access Control Lists (#1 bug source)
-├── patterns/SKILL.md     # Confidential ERC-20, voting, auctions
-├── testing/SKILL.md      # Hardhat + FHEVM plugin testing
-├── security/SKILL.md     # FHE-specific vulnerabilities
-├── addresses/SKILL.md    # Verified contract addresses
-├── tools/SKILL.md        # Hardhat toolchain
-├── frontend/SKILL.md     # Client-side encryption with fhevmjs
-├── deployment/SKILL.md   # Deploying to FHEVM chains
-└── migration/SKILL.md    # Adding FHE to existing contracts
+├── SKILL.md                        # Router - links to all skills
+├── AGENTS.md                       # Agent discovery
+├── CLAUDE.md                       # Development guidance
+├── README.md                       # Project overview
+├── skills/
+│   ├── general/SKILL.md            # FHE concepts, planning, architecture
+│   ├── solidity/SKILL.md           # Encrypted types, ACL, patterns, testing, deployment
+│   ├── typescript/SKILL.md         # Frontend encryption/decryption, UX
+│   └── addresses/SKILL.md          # Verified contract addresses
+├── .claude-plugin/plugin.json      # Claude plugin metadata
+├── index.html                      # Landing page
+└── vercel.json                     # Deployment config
 ```
 
 **URL pattern:** `https://fheskills.com/<skill>/SKILL.md`
 
 ### Content Methodology
 
-Inherited from ethskills' research-backed approach:
+Research-backed approach:
 
 1. **Triage first** - Spawn a stock LLM, give it a realistic FHE task, document what it gets wrong
 2. **Classify every line** - 🔴 (LLM blind spot), 🟣 (human teaching material), 🟡 (knows but skips), 🟢 (already knows + doesn't need teaching)
 3. **Keep only 🔴 and 🟣** - Cut everything else
 
 **The rule:** Every line must either fill a verified LLM blind spot OR teach essential concepts to humans. If stock LLMs already know it AND humans don't need it explained, cut it.
-
-See ethskills' CONTRIBUTING.md for full methodology: https://github.com/austintgriffith/ethskills/blob/master/CONTRIBUTING.md
 
 ### File Conventions
 
@@ -356,8 +352,8 @@ const publicValue = await getPublicValue(encryptedValue);
 
 ### Adding a New Skill
 
-1. Create directory: `mkdir new-skill/`
-2. Write `new-skill/SKILL.md` following the template:
+1. Create directory: `mkdir skills/new-skill/`
+2. Write `skills/new-skill/SKILL.md` following the template:
    - What LLMs get wrong (the corrections)
    - Verified code examples
    - Common pitfalls with ACL
@@ -392,12 +388,12 @@ Per `HANDOFF.md`, the following are not yet complete:
 2. **No remote repo** - Needs GitHub repo creation
 3. **Blind-spot triage not run** - Content seeded from internal skills, not validated against LLM failure modes
 4. **No CONTRIBUTING.md** - Should document the triage methodology
-5. **No audit skill** - Could benefit from FHE-specific audit checklist (like ethskills' `audit/SKILL.md`)
+5. **No audit skill** - Could benefit from FHE-specific audit checklist
 6. **Domain not set up** - Needs fheskills.com + Vercel deployment
 
 ## Smart Contract Development Best Practices
 
-### Critical Security Patterns (from ethskills)
+### Critical Security Patterns
 
 Even with FHE, you still need to follow standard Solidity security practices:
 
@@ -574,7 +570,4 @@ FHE operations cost gas. They are NOT `view` functions:
 
 ## Reference Projects
 
-- **ethskills** (`/Users/aurora/Desktop/aurora/ai-skills/ethskills/`) - Same structure, Ethereum-focused
 - **zama-marketplace** (`/Users/aurora/Desktop/aurora/ai-skills/zama-marketplace/`) - Internal plugin system (different use case)
-
-Both are available locally for reference but are separate projects.

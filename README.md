@@ -8,8 +8,6 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 A skill set that teaches AI agents (and developers) how to build confidential dApps with FHEVM. Each skill is a standalone markdown file that fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
 
-**Modeled after [ethskills](https://github.com/austintgriffith/ethskills).**
-
 ## 3 Skills — That's It
 
 | Skill | What it covers |

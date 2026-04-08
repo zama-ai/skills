@@ -564,4 +564,3 @@ For complete TypeScript/React patterns and SDK usage, fetch `typescript/SKILL.md
 - **Zama Documentation:** https://docs.zama.ai/protocol
 - **FHEVM GitHub:** https://github.com/zama-ai/fhevm
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
-- **ethskills (Ethereum development skills):** https://github.com/austintgriffith/ethskills

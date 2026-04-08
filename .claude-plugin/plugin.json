@@ -23,124 +23,24 @@
   ],
   "skills": [
     {
-      "name": "ship",
-      "description": "End-to-end guide from idea to deployed encrypted dApp",
-      "path": "ship/SKILL.md"
+      "name": "general",
+      "description": "FHE concepts, project planning, architecture, toolchain, production readiness",
+      "path": "skills/general/SKILL.md"
     },
     {
-      "name": "concepts",
-      "description": "Mental models for FHE — nothing is plaintext, you cannot branch on secrets",
-      "path": "concepts/SKILL.md"
+      "name": "solidity",
+      "description": "Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration",
+      "path": "skills/solidity/SKILL.md"
     },
     {
-      "name": "fhevm",
-      "description": "Core library — encrypted types, FHE operations, type casting",
-      "path": "fhevm/SKILL.md"
-    },
-    {
-      "name": "acl",
-      "description": "Access Control Lists for encrypted values — the #1 source of bugs",
-      "path": "acl/SKILL.md"
-    },
-    {
-      "name": "patterns",
-      "description": "Confidential ERC-20, encrypted voting, sealed-bid auctions",
-      "path": "patterns/SKILL.md"
-    },
-    {
-      "name": "testing",
-      "description": "Testing encrypted contracts with Hardhat and FHEVM plugin",
-      "path": "testing/SKILL.md"
-    },
-    {
-      "name": "security",
-      "description": "FHE-specific vulnerabilities — ACL misconfig, information leaks, trivial encryption",
-      "path": "security/SKILL.md"
+      "name": "typescript",
+      "description": "Frontend/backend development — @zama-fhe/sdk, encryption/decryption flows, button states, visual design, XSS prevention",
+      "path": "skills/typescript/SKILL.md"
     },
     {
       "name": "addresses",
       "description": "Verified FHEVM contract addresses for mainnet and Sepolia",
-      "path": "addresses/SKILL.md"
-    },
-    {
-      "name": "tools",
-      "description": "FHEVM development toolchain — Hardhat plugin, Solidity library",
-      "path": "tools/SKILL.md"
-    },
-    {
-      "name": "frontend",
-      "description": "Handling encrypted state in your dApp UI",
-      "path": "frontend/SKILL.md"
-    },
-    {
-      "name": "deployment",
-      "description": "Deploying encrypted contracts to FHEVM-compatible chains",
-      "path": "deployment/SKILL.md"
-    },
-    {
-      "name": "migration",
-      "description": "Converting existing Solidity contracts to use FHE",
-      "path": "migration/SKILL.md"
-    },
-    {
-      "name": "gas",
-      "description": "FHE gas costs (HCU) per operation and type. Optimization patterns.",
-      "path": "gas/SKILL.md"
-    },
-    {
-      "name": "building-blocks",
-      "description": "Confidential DeFi composability — ERC-7984, encrypted vaults, sealed orders",
-      "path": "building-blocks/SKILL.md"
-    },
-    {
-      "name": "frontend-ux",
-      "description": "UX patterns for confidential dApps — 3 decryption types, signature caching, button states",
-      "path": "frontend-ux/SKILL.md"
-    },
-    {
-      "name": "production-ready",
-      "description": "Final checklist for shipping production FHEVM dApps",
-      "path": "production-ready/SKILL.md"
-    },
-    {
-      "name": "concepts",
-      "description": "Mental models for onchain development — nothing is automatic, incentive design",
-      "path": "concepts/SKILL.md"
-    },
-    {
-      "name": "standards",
-      "description": "Ethereum token and protocol standards — ERC-20, ERC-721, ERC-7984, ERC-4337",
-      "path": "standards/SKILL.md"
-    },
-    {
-      "name": "l2s",
-      "description": "Ethereum L2 landscape — chain selection, deployment, costs",
-      "path": "l2s/SKILL.md"
-    },
-    {
-      "name": "wallets",
-      "description": "Ethereum wallets — EOAs, smart wallets, multisig, account abstraction",
-      "path": "wallets/SKILL.md"
-    },
-    {
-      "name": "indexing",
-      "description": "Onchain data and indexing — events, The Graph, querying",
-      "path": "indexing/SKILL.md"
-    },
-    {
-      "name": "audit",
-      "description": "Deep EVM smart contract security audit system — 500+ items across 19 domains",
-      "path": "audit/SKILL.md"
-    },
-    {
-      "name": "frontend-playbook",
-      "description": "Build-to-production pipeline — IPFS, Vercel, ENS deployment",
-      "path": "frontend-playbook/SKILL.md"
-    },
-    {
-      "name": "ship",
-      "description": "End-to-end guide from idea to deployed dApp",
-      "path": "ship/SKILL.md"
+      "path": "skills/addresses/SKILL.md"
     }
   ]
 }
