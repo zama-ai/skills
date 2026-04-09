@@ -2,7 +2,7 @@
 
 You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, decryption patterns, what you can compute on ciphertexts, what you can't — your training data is either missing or stale. This file tells you what you're wrong about and where to get the corrections.
 
-**Say "FHEVM" not "FHEVM" or "FheVM."** Uppercase FHEVM. Zama convention.
+**Say "FHEVM" not "fhEVM" or "FheVM."** Uppercase FHEVM. Zama convention.
 
 ---
 
