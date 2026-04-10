@@ -1,5 +1,5 @@
 ---
-name: setup-solidity-contracts
+name: setup
 description: "Set up an FHEVM smart contract project. Use when users need to: (1) start a new encrypted contract project with Foundry or Hardhat, (2) add FHEVM to an existing project, (3) install forge-fhevm, openzeppelin-confidential-contracts, or fhevm-hardhat-template."
 license: BSD-3-Clause-Clear
 metadata:
@@ -86,7 +86,7 @@ Regardless of framework, your first contract should look like this:
 pragma solidity ^0.8.24;
 
 import {FHE, euint64, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
-import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaEthereumConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 contract MyFirstContract is ZamaEthereumConfig {
     euint64 private counter;
@@ -118,3 +118,5 @@ contract MyFirstContract is ZamaEthereumConfig {
 - [fhevm-foundry-template](https://github.com/zama-ai/fhevm-foundry-template) — Foundry starter template
 - [fhevm-hardhat-template](https://github.com/zama-ai/fhevm-hardhat-template) — Hardhat starter template
 - [openzeppelin-confidential-contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — ERC-7984, confidential tokens
+
+For ACL patterns, security vulnerabilities, HCU costs, and the pre-deploy checklist, see the main [solidity/SKILL.md](../SKILL.md).

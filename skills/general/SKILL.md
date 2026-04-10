@@ -362,17 +362,7 @@ When users encrypt values client-side (using `@zama-fhe/sdk`), they must prove t
 | Per-tx depth (`maxHCUDepthPerTx`) | 5,000,000 | Sequential depth limit |
 | Per-block global (`globalHCUCapPerBlock`) | 5,000,000 | Cap for non-whitelisted accounts |
 
-### Quick Reference (euint64)
-
-| Operation | Scalar HCU | Non-scalar HCU |
-|-----------|-----------|----------------|
-| `FHE.add` / `FHE.sub` | 133,000 | 162,000 |
-| `FHE.mul` | 365,000 | 596,000 |
-| `FHE.div` (plaintext only) | 715,000 | — |
-| `FHE.eq` | 83,000 | 120,000 |
-| `FHE.gt` / `FHE.lt` | ~118,000 | ~152,000 |
-| `FHE.select` | — | 55,000 |
-| `FHE.min` / `FHE.max` | ~150,000 | ~219,000 |
+For per-operation HCU costs, see `solidity/SKILL.md` (HCU section).
 
 **Optimization rules:**
 - Use **scalar operations** when one operand is plaintext (always cheaper)
@@ -410,6 +400,23 @@ Ask the developer:
 3. **Custom integration** — contracts + their own frontend/backend
 4. **Adding privacy to existing contracts** — migrate specific values to encrypted
 
+### Define Your Encryption Flow First
+
+Before writing any code, ask the developer: **which values exactly need to be encrypted, and where do the encryption boundaries sit?**
+
+Map out the full lifecycle of every sensitive value:
+- **Where does it enter the system?** If users deposit plaintext ERC-20 and you trivially encrypt it onchain, everyone saw the deposit amount — the encryption is cosmetic. Users should hold encrypted tokens (ERC-7984 or confidential wrappers) *before* interacting with your contract.
+- **Where does it exit?** If users withdraw plaintext, the output amount is public regardless of what happened encrypted in the middle. Design exit paths that preserve privacy or accept that exits are public.
+- **What's the threat model?** Hiding order sizes from MEV bots during matching? Full balance privacy end-to-end? The answer determines where encryption must start and end.
+
+A common mistake: encrypting computation in the middle while leaving entry and exit plaintext. An observer who watches deposits and withdrawals can reconstruct the economic outcome even if the matching was encrypted.
+
+**The rule:** Draw the encryption boundary *before* the architecture. If a value is plaintext at any point in its lifecycle, assume it's public.
+
+### Confidential Tokens — Use ERC-7984
+
+For anything involving confidential tokens, use the **ERC-7984** implementation from [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts). Don't roll your own. For tokens that already have deployed wrappers (cUSDC, cUSDT, cWETH), use those — see `addresses/SKILL.md`.
+
 ### Choose Your Setup
 
 **Foundry:**
@@ -430,7 +437,7 @@ git clone https://github.com/zama-ai/fhevm-react-template
 ```
 Or add `@zama-fhe/sdk` to your own frontend.
 
-For detailed setup instructions, see [solidity/setup-solidity-contracts/SKILL.md](../solidity/setup-solidity-contracts/SKILL.md).
+For detailed setup instructions, see [solidity/setup/SKILL.md](../solidity/setup/SKILL.md).
 
 ### Key Packages
 
@@ -464,9 +471,14 @@ Sepolia testnet does not require an API key.
 
 ## Chain Support
 
-**Currently supported:** Ethereum mainnet and Sepolia testnet only. Use `ZamaEthereumConfig` in your contracts — it auto-detects the chain.
+| Chain | Status | Config |                                                                                                          
+|-------|--------|--------|                                                                                                          
+| Ethereum mainnet | Supported | `ZamaEthereumConfig` |                                                                              
+| Sepolia testnet | Supported | `ZamaEthereumConfig` (auto-detects) |                                                                
+| EVM L2s | Not yet supported | Future expansion |
+| Solana | Not yet supported | planned for end of 2026 | 
 
-**If you need another chain:** Don't use FHEVM right now. More EVM-compatible chains are coming, and Solana integration is planned for end of 2026. Until then, if your project requires a chain that isn't Ethereum mainnet or Sepolia, FHEVM is not the right fit today.
+**If you need another chain:** Don't use FHEVM right now. More EVM-compatible chains are coming. Until then, if your project requires a chain that isn't Ethereum mainnet or Sepolia, FHEVM is not the right fit today.
 
 ---
 
@@ -485,7 +497,7 @@ Sepolia testnet does not require an API key.
 
 ## Tech Spec References
 
-For deep protocol details, reference the Zama Protocol technical specifications at `https://github.com/zama-ai/tech-spec`:
+For deep protocol details, reference the Zama Protocol technical specifications at `https://github.com/zama-ai/tech-spec/tree/new-tech-specs`:
 
 | Topic | Spec path |
 |-------|-----------|
@@ -506,8 +518,8 @@ Full spec index: `architecture/README.md`. RFCs: `rfcs/README.md`.
 
 ## Resources
 
-- **Zama Protocol Docs:** https://docs.zama.ai/protocol
-- **Tech Specs:** https://github.com/zama-ai/tech-spec
+- **Zama Protocol Docs:** https://docs.zama.ai
+- **Tech Specs:** https://github.com/zama-ai/tech-spec/tree/new-tech-specs
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
 - **Forge FHEVM:** https://github.com/zama-ai/forge-fhevm
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
