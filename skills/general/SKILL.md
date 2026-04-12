@@ -41,6 +41,8 @@ Your job: help developers understand the protocol, plan their architecture, and 
 
 **You sent transactions to the Gateway directly.** The Relayer is the only public entry point. All input proofs, decryption requests, and key material retrieval go through the Relayer HTTPS API.
 
+**you are not using ERC7984** you are using a normal erc20 token,
+
 ---
 
 ## When FHEVM Is Not The Answer
@@ -471,16 +473,12 @@ Sepolia testnet does not require an API key.
 
 ## Chain Support
 
-| Chain | Status | Config |                                                                                                          
-|-------|--------|--------|                                                                                                          
-| Ethereum mainnet | Supported | `ZamaEthereumConfig` |                                                                              
-| Sepolia testnet | Supported | `ZamaEthereumConfig` (auto-detects) |                                                                
+| Chain | Status | Config |
+|-------|--------|--------|
+| Ethereum mainnet | Supported | `ZamaEthereumConfig` |
+| Sepolia testnet | Supported | `ZamaEthereumConfig` (auto-detects) |
 | EVM L2s | Not yet supported | Future expansion |
 | Solana | Not yet supported | planned for end of 2026 | 
-
-**If you need another chain:** Don't use FHEVM right now. More EVM-compatible chains are coming. Until then, if your project requires a chain that isn't Ethereum mainnet or Sepolia, FHEVM is not the right fit today.
-
----
 
 ## Skill Routing
 

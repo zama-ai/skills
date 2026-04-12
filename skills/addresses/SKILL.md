@@ -95,18 +95,20 @@ These are the standard ERC-20 tokens that the confidential wrappers above wrap. 
 
 ### Sepolia Testnet (Mock Wrappers)
 
-Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the underlying address via each wrapper's `underlying()` view function.
+Mock wrappers wrap mintable ERC-20 tokens deployed for testing. Underlying tokens have a public `mint(address to, uint256 amount)` function, limited to **1,000,000 tokens per call**.
 
-| Name | Symbol | Address |
-|------|--------|---------|
-| Confidential USDC (Mock) | `cUSDCMock` | [`0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639`](https://sepolia.etherscan.io/address/0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639) |
-| Confidential USDT (Mock) | `cUSDTMock` | [`0x4E7B06D78965594eB5EF5414c357ca21E1554491`](https://sepolia.etherscan.io/address/0x4E7B06D78965594eB5EF5414c357ca21E1554491) |
-| Confidential WETH (Mock) | `cWETHMock` | [`0x46208622DA27d91db4f0393733C8BA082ed83158`](https://sepolia.etherscan.io/address/0x46208622DA27d91db4f0393733C8BA082ed83158) |
-| Confidential BRON (Mock) | `cBRONMock` | [`0xaa5612FA27c927a0c7961f5AEFEE5ba3A0F9C891`](https://sepolia.etherscan.io/address/0xaa5612FA27c927a0c7961f5AEFEE5ba3A0F9C891) |
-| Confidential ZAMA (Mock) | `cZAMAMock` | [`0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB`](https://sepolia.etherscan.io/address/0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB) |
-| Confidential tGBP (Mock) | `ctGBPMock` | [`0xfCE5c7069c5525eF6c8C2b2E35A745bA20a2F7CC`](https://sepolia.etherscan.io/address/0xfCE5c7069c5525eF6c8C2b2E35A745bA20a2F7CC) |
-| Confidential XAUt (Mock) | `cXAUtMock` | [`0xe4FcF848739845BC81Dee1d5352cf3844F0a60C7`](https://sepolia.etherscan.io/address/0xe4FcF848739845BC81Dee1d5352cf3844F0a60C7) |
-| Confidential tGBP | `ctGBP` | [`0x167DC962808B32CFFFc7e14B5018c0bE06A3A208`](https://sepolia.etherscan.io/address/0x167DC962808B32CFFFc7e14B5018c0bE06A3A208) |
+> **Note:** The ZAMA (Mock) underlying token is a mock — it is NOT the real Sepolia ZAMA token.
+
+| Name | Symbol | Wrapper | Underlying Token |
+|------|--------|---------|------------------|
+| Confidential USDC (Mock) | `cUSDCMock` | [`0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639`](https://sepolia.etherscan.io/address/0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639) | [`0x9b5Cd13b8eFbB58Dc25A05CF411D8056058aDFfF`](https://sepolia.etherscan.io/address/0x9b5Cd13b8eFbB58Dc25A05CF411D8056058aDFfF) |
+| Confidential USDT (Mock) | `cUSDTMock` | [`0x4E7B06D78965594eB5EF5414c357ca21E1554491`](https://sepolia.etherscan.io/address/0x4E7B06D78965594eB5EF5414c357ca21E1554491) | [`0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0`](https://sepolia.etherscan.io/address/0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0) |
+| Confidential WETH (Mock) | `cWETHMock` | [`0x46208622DA27d91db4f0393733C8BA082ed83158`](https://sepolia.etherscan.io/address/0x46208622DA27d91db4f0393733C8BA082ed83158) | [`0xff54739b16576FA5402F211D0b938469Ab9A5f3F`](https://sepolia.etherscan.io/address/0xff54739b16576FA5402F211D0b938469Ab9A5f3F) |
+| Confidential BRON (Mock) | `cBRONMock` | [`0xaa5612FA27c927a0c7961f5AEFEE5ba3A0F9C891`](https://sepolia.etherscan.io/address/0xaa5612FA27c927a0c7961f5AEFEE5ba3A0F9C891) | [`0xFf021fB13cA64e5354c62c954b949a88cfDEb25E`](https://sepolia.etherscan.io/address/0xFf021fB13cA64e5354c62c954b949a88cfDEb25E) |
+| Confidential ZAMA (Mock) | `cZAMAMock` | [`0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB`](https://sepolia.etherscan.io/address/0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB) | [`0x75355a85c6FB9df5f0C80FF54e8747EEe9a0BF57`](https://sepolia.etherscan.io/address/0x75355a85c6FB9df5f0C80FF54e8747EEe9a0BF57) |
+| Confidential tGBP (Mock) | `ctGBPMock` | [`0xfCE5c7069c5525eF6c8C2b2E35A745bA20a2F7CC`](https://sepolia.etherscan.io/address/0xfCE5c7069c5525eF6c8C2b2E35A745bA20a2F7CC) | [`0x93c931278A2aad1916783F952f94276eA5111442`](https://sepolia.etherscan.io/address/0x93c931278A2aad1916783F952f94276eA5111442) |
+| Confidential XAUt (Mock) | `cXAUtMock` | [`0xe4FcF848739845BC81Dee1d5352cf3844F0a60C7`](https://sepolia.etherscan.io/address/0xe4FcF848739845BC81Dee1d5352cf3844F0a60C7) | [`0x24377AE4AA0C45ecEe71225007f17c5D423dd940`](https://sepolia.etherscan.io/address/0x24377AE4AA0C45ecEe71225007f17c5D423dd940) |
+| Confidential tGBP | `ctGBP` | [`0x167DC962808B32CFFFc7e14B5018c0bE06A3A208`](https://sepolia.etherscan.io/address/0x167DC962808B32CFFFc7e14B5018c0bE06A3A208) | [`0xf6Ef9ADB61A48E29E36bc873070A46A3D2667ff3`](https://sepolia.etherscan.io/address/0xf6Ef9ADB61A48E29E36bc873070A46A3D2667ff3) |
 
 **Wrappers Registry (Sepolia):** [`0x2f0750Bbb0A246059d80e94c454586a7F27a128e`](https://sepolia.etherscan.io/address/0x2f0750Bbb0A246059d80e94c454586a7F27a128e)
 
@@ -128,6 +130,8 @@ Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the under
 | Zama Token | [`0xa798B04149e7a61cc95B7D114AD420e8969eA268`](https://sepolia.etherscan.io/address/0xa798B04149e7a61cc95B7D114AD420e8969eA268) |
 | Zama OFT Adapter | [`0x55D5258841e9Fd304007683ff4637b0a80fb0e62`](https://sepolia.etherscan.io/address/0x55D5258841e9Fd304007683ff4637b0a80fb0e62) |
 
+Note: the Sepolia ZAMA token address is different from the mainnet ZAMA token.
+
 ### Other Chains
 
 | Chain | Contract | Address |
@@ -139,6 +143,8 @@ Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the under
 | Gateway Testnet | Zama OFT | [`0xcE762c7FDaac795D31a266B9247F8958c159c6d4`](https://explorer.testnet.zama.org/address/0xcE762c7FDaac795D31a266B9247F8958c159c6d4) |
 | Solana Mainnet | Zama OFT (Mint) | [`4Zp52aF4hZi9fzH19xpbWKYKQvgLyCN67KFbrQDqeTKh`](https://explorer.solana.com/address/4Zp52aF4hZi9fzH19xpbWKYKQvgLyCN67KFbrQDqeTKh) |
 | Solana Mainnet | Zama OFT Program | [`A8W6AL4JhE4EDDcfXZ1Q8vQpwp83AnPj4UZ6y86gVFKN`](https://explorer.solana.com/address/A8W6AL4JhE4EDDcfXZ1Q8vQpwp83AnPj4UZ6y86gVFKN) |
+| Solana Mainnet | Zama OFT Escrow | [`22tZd8TXQGuTXEitCqxVKacdY2TAdjydsKJCFEC8jyuH`](https://explorer.solana.com/address/22tZd8TXQGuTXEitCqxVKacdY2TAdjydsKJCFEC8jyuH) |
+| Solana Mainnet | Zama OFT Store | [`H9UdnuUqDJ5RV2GguybxsQb7CBQN7kQGBpKxk2dzQzx3`](https://explorer.solana.com/address/H9UdnuUqDJ5RV2GguybxsQb7CBQN7kQGBpKxk2dzQzx3) |
 
 ---
 
@@ -152,6 +158,8 @@ Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the under
 | Coprocessor | [`0x7147485b892158f2B875f7aC5Ea48A9937C66AE8`](https://etherscan.io/address/0x7147485b892158f2B875f7aC5Ea48A9937C66AE8) |
 
 ### Sepolia — Protocol Staking
+
+> Sepolia staking contracts use a mock mintable ERC-20 as the underlying asset: [`0x9216F67a276B4bf1D883C4Ec24095C2bc53C2ef4`](https://sepolia.etherscan.io/address/0x9216F67a276B4bf1D883C4Ec24095C2bc53C2ef4)
 
 | Role | Address |
 |------|---------|
@@ -170,6 +178,13 @@ Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the under
 | Governance Multisig | [`0xE43c73aAb2b6aBBad6d0461997ce1cfea5ABe66f`](https://etherscan.io/address/0xE43c73aAb2b6aBBad6d0461997ce1cfea5ABe66f) |
 | Governance OApp Sender | [`0x1c5D750D18917064915901048cdFb2dB815e0910`](https://etherscan.io/address/0x1c5D750D18917064915901048cdFb2dB815e0910) |
 
+### Sepolia Testnet
+
+| Name | Address |
+|------|---------|
+| Protocol DAO | [`0x08e8a84c3c8c7cba165B1adcf67Ae4639eF84f52`](https://sepolia.etherscan.io/address/0x08e8a84c3c8c7cba165B1adcf67Ae4639eF84f52) |
+| Governance OApp Sender | [`0x909692c2f4979ca3fa11B5859d499308A1ec4932`](https://sepolia.etherscan.io/address/0x909692c2f4979ca3fa11B5859d499308A1ec4932) |
+
 ### Gateway Mainnet
 
 | Name | Address |
@@ -177,6 +192,14 @@ Testnet wrappers use mocked mintable ERC-20 tokens as underlying. Find the under
 | Governance OApp Receiver | [`0x10795261A06285D3718674a9Cf98Ea66F7C6A0c6`](https://explorer.mainnet.zama.org/address/0x10795261A06285D3718674a9Cf98Ea66F7C6A0c6) |
 | Admin Module | [`0x57f866b5E7Fb82Fb812Ed3D3C79cdB35E9e91518`](https://explorer.mainnet.zama.org/address/0x57f866b5E7Fb82Fb812Ed3D3C79cdB35E9e91518) |
 | Safe Multisig | [`0x5f0F86BcEad6976711C9B131bCa5D30E767fe2bE`](https://explorer.mainnet.zama.org/address/0x5f0F86BcEad6976711C9B131bCa5D30E767fe2bE) |
+
+### Gateway Testnet
+
+| Name | Address |
+|------|---------|
+| Governance OApp Receiver | [`0x998E9484Aa2a9Ae5B0C8a93B4bD2ea2a5C1B6fF0`](https://explorer.testnet.zama.org/address/0x998E9484Aa2a9Ae5B0C8a93B4bD2ea2a5C1B6fF0) |
+| Admin Module | [`0x53dB449A96d0319DD1f90102dA116Bb9aB0483bB`](https://explorer.testnet.zama.org/address/0x53dB449A96d0319DD1f90102dA116Bb9aB0483bB) |
+| Safe Multisig | [`0x3241b3A4036a356c5D7e36a432Da2B8e5739D9c9`](https://explorer.testnet.zama.org/address/0x3241b3A4036a356c5D7e36a432Da2B8e5739D9c9) |
 
 ---
 

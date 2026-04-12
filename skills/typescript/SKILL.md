@@ -5,6 +5,10 @@ description: Complete guide to TypeScript development with FHEVM — frontend, b
 
 # TypeScript — Frontend & Backend for Confidential dApps
 
+> **Setting up a new project?** See [setup/SKILL.md](setup/SKILL.md) for React template, SDK installation, and first encryption.
+
+---
+
 ## What You Probably Got Wrong
 
 **You don't know the three decryption types.** There are three distinct ways to decrypt values in FHEVM. Each has different UX, different security implications, and different API calls:
