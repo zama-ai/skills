@@ -8,15 +8,17 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 A skill set that teaches AI agents (and developers) how to build confidential dApps with FHEVM. Each skill is a standalone markdown file that fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
 
-## 3 Skills — That's It
+## Skills
 
 | Skill | What it covers |
 |-------|---------------|
-| **[General](general/SKILL.md)** | FHE concepts, project planning, architecture, toolchain, production readiness |
-| **[Solidity](solidity/SKILL.md)** | Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration |
-| **[TypeScript](typescript/SKILL.md)** | `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, encryption/decryption, button states, visual design, XSS prevention |
+| **[General](skills/general/SKILL.md)** | FHE concepts, project planning, architecture, toolchain, production readiness |
+| **[Solidity](skills/solidity/SKILL.md)** | Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration |
+| **[TypeScript](skills/typescript/SKILL.md)** | `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, encryption/decryption, button states, visual design, XSS prevention |
+| **[Zama SDK](skills/zama-sdk/SKILL.md)** | `@zama-fhe/sdk` integration for backend, Node.js, workers, scripts, and custom non-React apps |
+| **[Zama React SDK](skills/zama-react-sdk/SKILL.md)** | `@zama-fhe/react-sdk` integration for React apps using `ZamaProvider`, official hooks, and wagmi/viem/ethers |
 
-**Plus:** [Addresses](addresses/SKILL.md) — verified FHEVM contract addresses for mainnet and Sepolia.
+**Plus:** [Addresses](skills/addresses/SKILL.md) — verified FHEVM contract addresses for mainnet and Sepolia.
 
 ## Quick Start
 

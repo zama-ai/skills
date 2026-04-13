@@ -38,6 +38,16 @@
       "path": "skills/typescript/SKILL.md"
     },
     {
+      "name": "zama-sdk",
+      "description": "Core SDK integration guidance for backend, Node.js, workers, scripts, and custom non-React apps",
+      "path": "skills/zama-sdk/SKILL.md"
+    },
+    {
+      "name": "zama-react-sdk",
+      "description": "React SDK integration guidance for wagmi, viem, and ethers apps using ZamaProvider and official hooks",
+      "path": "skills/zama-react-sdk/SKILL.md"
+    },
+    {
       "name": "addresses",
       "description": "Verified FHEVM contract addresses for mainnet and Sepolia",
       "path": "skills/addresses/SKILL.md"

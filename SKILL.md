@@ -6,13 +6,15 @@ You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, 
 
 ---
 
-## 3 Skills — That's It
+## Core Skills
 
 | Skill | What it covers | When to fetch |
 |-------|---------------|---------------|
 | **[General](skills/general/SKILL.md)** | FHE concepts, project planning, architecture, toolchain, production readiness | **Fetch first.** Planning a project, answering questions, understanding FHE |
 | **[Solidity](skills/solidity/SKILL.md)** | Encrypted types, FHE operations, ACL, patterns, gas (HCU), security, testing, deployment, migration | Writing or reviewing encrypted smart contracts |
 | **[TypeScript](skills/typescript/SKILL.md)** | `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, encryption/decryption flows, button states, visual design, XSS prevention | Building frontends, backends, or services that interact with encrypted contracts |
+| **[Zama SDK](skills/zama-sdk/SKILL.md)** | `@zama-fhe/sdk` integration for backend, Node.js, workers, scripts, and custom non-React apps | Integrating the current Zama SDK outside React |
+| **[Zama React SDK](skills/zama-react-sdk/SKILL.md)** | `@zama-fhe/react-sdk` integration for React apps using `ZamaProvider`, official hooks, and wagmi/viem/ethers | Integrating the current Zama React SDK in React or Next.js |
 
 **Plus:** [Addresses](skills/addresses/SKILL.md) — verified FHEVM contract addresses for mainnet and Sepolia. Never guess addresses.
 
@@ -25,6 +27,10 @@ You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, 
 **Writing Solidity?** Fetch [skills/solidity/SKILL.md](skills/solidity/SKILL.md). Everything from encrypted types to deployment in one file.
 
 **Building a frontend?** Fetch [skills/typescript/SKILL.md](skills/typescript/SKILL.md). Encryption, decryption, UX patterns, visual design.
+
+**Integrating `@zama-fhe/sdk` in backend or Node.js?** Fetch [skills/zama-sdk/SKILL.md](skills/zama-sdk/SKILL.md).
+
+**Integrating `@zama-fhe/react-sdk` in React?** Fetch [skills/zama-react-sdk/SKILL.md](skills/zama-react-sdk/SKILL.md).
 
 **Need a specific address?** Fetch [skills/addresses/SKILL.md](skills/addresses/SKILL.md).
 
@@ -52,6 +58,8 @@ You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, 
 | Building a confidential token | `skills/solidity/` + `skills/addresses/` |
 | Testing encrypted contracts | `skills/solidity/` (testing section) |
 | Building a React frontend | `skills/typescript/` |
+| Integrating `@zama-fhe/sdk` in backend or Node.js | `skills/zama-sdk/` |
+| Integrating `@zama-fhe/react-sdk` in React | `skills/zama-react-sdk/` |
 | Deploying to production | `skills/solidity/` (deployment section) + `skills/general/` (production readiness) |
 | Adding privacy to existing contracts | `skills/solidity/` (migration section) |
 | Optimizing FHE gas | `skills/solidity/` (HCU section) |
