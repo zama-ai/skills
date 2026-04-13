@@ -80,7 +80,8 @@ euint8  tin = FHE.asEuint8(big);   // truncates
 - **`ebool` is not `bool`** — cannot be used in `if`. Use `FHE.select(cond, ifTrue, ifFalse)`.
 - **No decrypt in view functions** — decryption is async.
 - **Wrapping arithmetic** — all FHE math is unchecked. Detect overflow with `FHE.lt(sum, original)` and `FHE.select`.
-- **Gas** — FHE ops cost 20–100× a normal op. Prefer scalar operands: `FHE.add(x, 42)` is much cheaper than `FHE.add(x, FHE.asEuint32(42))`.
+- **Gas** — FHE ops cost 20–100× a normal op. Prefer scalar operands: `FHE.add(x, 42)` is much cheaper than `FHE.add(x, FHE.asEuint32(42))`. Encrypted×encrypted `mul` is the single most expensive common op — if one side can be plaintext, keep it that way. A realistic encrypted swap/settlement tx is ~2–3M gas under `FhevmTest` and more on the real coprocessor; budget accordingly.
+- **`FHE.select` executes both branches** — "rejection" paths still run their transfers/ops (e.g. encrypted-slippage guards transfer encrypted zero rather than skipping). There is no way to skip work based on an encrypted condition without an async decrypt round-trip.
 - **Shifts** — `shl`/`shr` shift modulo bit width.
 - **Variable shadowing** — don't name a local the same as the enclosing function.
 

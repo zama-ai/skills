@@ -19,16 +19,21 @@ evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+fs_permissions = [
+    { access = "read-write", path = "lib/forge-fhevm/src/fhevm-host/addresses/FHEVMHostAddresses.sol" },
+]
 ```
 
 **`via_ir = true` is mandatory** — FHE contracts hit "stack too deep" without it.
+
+**`fs_permissions` is mandatory** — `FhevmTest.setUp()` writes the host addresses file; without the entry, every test reverts with a filesystem-permission error.
 
 ## Test pattern
 
 Inherit `FhevmTest`. `setUp()` deploys real fhEVM host contracts at canonical addresses.
 
 ```solidity
-import {FhevmTest} from "forge-fhevm/FhevmTest.sol";
+import {FhevmTest} from "forge-fhevm/src/FhevmTest.sol";
 import {euint64, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
 
 contract MyTokenTest is FhevmTest {
