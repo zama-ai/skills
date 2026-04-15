@@ -11,8 +11,8 @@
   },
   "plugins": [
     {
-      "name": "fheskill",
-      "source": "fheskill",
+      "name": "zama-protocol",
+      "source": "zama-protocol",
       "description": "Build confidential smart contracts and dApps on Zama's FHEVM — FHE concepts, Solidity patterns, ERC-7984, TypeScript SDK integration, verified addresses.",
       "version": "0.1.0",
       "author": {

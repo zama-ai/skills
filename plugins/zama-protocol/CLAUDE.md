@@ -4,19 +4,19 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-**fheskill** — the external-facing skill for AI agents building confidential smart contracts with Zama's FHEVM.
+**zama-protocol** — the external-facing skill for AI agents building confidential smart contracts with Zama's FHEVM.
 
-- **Install:** `/plugin marketplace add zama-ai/skills && /plugin install fheskill@zama-skills`
+- **Install:** `/plugin marketplace add zama-ai/skills && /plugin install zama-protocol@zama-skills`
 - **License:** BSD-3-Clause-Clear
 
-This directory is one skill inside the [`zama-ai/skills`](https://github.com/zama-ai/skills) marketplace repo. It lives at `plugins/fheskill/` within the repo. The repo root carries `.claude-plugin/marketplace.json` (with `metadata.pluginRoot: "./plugins"`) and a top-level README; this file is what ships when someone installs the `fheskill` plugin.
+This directory is one skill inside the [`zama-ai/skills`](https://github.com/zama-ai/skills) marketplace repo. It lives at `plugins/zama-protocol/` within the repo. The repo root carries `.claude-plugin/marketplace.json` (with `metadata.pluginRoot: "./plugins"`) and a top-level README; this file is what ships when someone installs the `zama-protocol` plugin.
 
 ## Structure
 
-The skill is named `fheskill` (frontmatter `name: fheskill`). `SKILL.md` in this directory is the router that always loads; everything under `references/` is read on demand.
+The skill is named `zama-protocol` (frontmatter `name: zama-protocol`). `SKILL.md` in this directory is the router that always loads; everything under `references/` is read on demand.
 
 ```
-plugins/fheskill/
+plugins/zama-protocol/
 ├── SKILL.md                        # Router — gotchas + task → reference map (always loaded)
 ├── AGENTS.md                       # Agent discovery
 ├── references/

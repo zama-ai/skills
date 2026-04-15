@@ -1,4 +1,4 @@
-# fheskills
+# Zama Protocol
 
 The missing knowledge between AI agents and production encrypted smart contracts on Zama's FHEVM.
 
@@ -34,7 +34,7 @@ references/
 
 ```
 /plugin marketplace add zama-ai/skills
-/plugin install fheskill@zama-skills
+/plugin install zama-protocol@zama-skills
 ```
 
 See the [repo root README](../../README.md) for alternatives (manual clone, git submodule).

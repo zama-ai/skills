@@ -8,16 +8,16 @@ Inside any Claude Code session, run these two commands:
 
 ```
 /plugin marketplace add zama-ai/skills
-/plugin install fheskill@zama-skills
+/plugin install zama-protocol@zama-skills
 ```
 
-That's it. The `fheskill` plugin is now installed and will trigger automatically when you mention FHEVM, confidential contracts, ERC-7984, or the Zama SDK. To pull updates later, run `/plugin marketplace update zama-skills`.
+That's it. The `zama-protocol` plugin is now installed and will trigger automatically when you mention FHEVM, confidential contracts, ERC-7984, or the Zama SDK. To pull updates later, run `/plugin marketplace update zama-skills`.
 
 ## Skills
 
 | Skill | What it does |
 |-------|--------------|
-| [`fheskill`](./plugins/fheskill) | Build confidential smart contracts and dApps on Zama's FHEVM — FHE concepts, Solidity patterns (encrypted types, ACL, HCU, ERC-7984), TypeScript SDK integration, verified addresses. |
+| [`zama-protocol`](./plugins/zama-protocol) | Build confidential smart contracts and dApps on Zama's FHEVM — FHE concepts, Solidity patterns (encrypted types, ACL, HCU, ERC-7984), TypeScript SDK integration, verified addresses. |
 
 ## Other install methods
 
@@ -26,13 +26,13 @@ That's it. The `fheskill` plugin is now installed and will trigger automatically
 
 ```bash
 git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
-ln -s ~/src/zama-skills/plugins/fheskill ~/.claude/skills/fheskill
+ln -s ~/src/zama-skills/plugins/zama-protocol ~/.claude/skills/zama-protocol
 ```
 
 Or copy into a project's local skills folder:
 
 ```bash
-cp -r ~/src/zama-skills/plugins/fheskill ./.claude/skills/fheskill
+cp -r ~/src/zama-skills/plugins/zama-protocol ./.claude/skills/zama-protocol
 ```
 </details>
 
@@ -44,10 +44,10 @@ skills/                                 ← this repo
 │   └── marketplace.json                ← marketplace index (pluginRoot: "./plugins")
 ├── README.md                           ← you are here
 └── plugins/
-    └── fheskill/                       ← the skill
-        ├── SKILL.md                    ← always-loaded router
+    └── zama-protocol/                   ← the skill
+        ├── SKILL.md                     ← always-loaded router
         ├── .claude-plugin/plugin.json
-        ├── references/                 ← on-demand reference files
+        ├── references/                  ← on-demand reference files
         │   ├── concepts.md
         │   ├── addresses.md
         │   ├── solidity/
@@ -57,7 +57,7 @@ skills/                                 ← this repo
         └── README.md
 ```
 
-Future skills live as sibling subdirectories under `plugins/` (e.g. `plugins/fheskill`, `plugins/other-skill`, …) and get added to `marketplace.json`.
+Future skills live as sibling subdirectories under `plugins/` (e.g. `plugins/zama-protocol`, `plugins/other-skill`, …) and get added to `marketplace.json`.
 
 ## License
 
