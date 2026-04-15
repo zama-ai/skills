@@ -6,7 +6,7 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 ## What is this?
 
-A single Claude Code skill that teaches AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
+A single Claude Code skill that teaches AI agents (and developers) how to build confidential dApps and SDK integrations with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts and Zama SDK usage.
 
 ## Install
 
