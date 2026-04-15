@@ -470,8 +470,6 @@ Sepolia testnet does not require an API key.
 | **Building frontend/backend** | `references/typescript/typescript.md` |
 | **Contract addresses** | `references/addresses.md` |
 
-**Base URL:** `https://fheskills.com/SKILL.md`
-
 ---
 
 ## Tech Spec References

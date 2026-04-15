@@ -4,42 +4,43 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-**fheskills** — the external-facing skill set for AI agents building confidential smart contracts with Zama's FHEVM.
+**zama-protocol** — the external-facing Claude Code skill for AI agents building confidential smart contracts with Zama's FHEVM.
 
-- **Deployed:** https://fheskills.com
-- **Install:** `npx skills add zama-ai/fheskills`
+- **Install:** `/plugin marketplace add zama-ai/skills && /plugin install zama-protocol@zama-skills`
 - **License:** BSD-3-Clause-Clear
 
 ## Structure
 
-This repo **is** a single skill (`name: zama`). `SKILL.md` at the root is the router that always loads; everything else under `references/` is read on demand.
+This repo **is** a single skill (`name: zama-protocol`). `SKILL.md` at the root is the router that always loads; everything else under `references/` is read on demand. The repo root also carries `.claude-plugin/marketplace.json` so it's installable directly via the Claude Code plugin marketplace flow — the plugin's `source` is `.` (the whole repo).
 
 ```
-fheskills/
-├── SKILL.md                        # Router — gotchas + task → reference map (always loaded)
-├── AGENTS.md                       # Agent discovery
+skills/                              ← this repo (zama-ai/skills)
+├── .claude-plugin/
+│   ├── marketplace.json             # Marketplace index (single plugin, source: ".")
+│   └── plugin.json                  # Plugin manifest (name: zama-protocol)
+├── SKILL.md                         # Router — gotchas + task → reference map (always loaded)
+├── AGENTS.md                        # Agent discovery
 ├── references/
-│   ├── concepts.md                 # FHEVM mental model, planning, production readiness
-│   ├── addresses.md                # Verified contract addresses
+│   ├── concepts.md                  # FHEVM mental model, planning, production readiness
+│   ├── addresses.md                 # Verified contract addresses
 │   ├── solidity/
-│   │   ├── solidity.md             # Encrypted Solidity router + config
-│   │   ├── erc7984.md              # Confidential token recipe + interface
-│   │   ├── fhe-advanced.md         # Raw FHE ops, manual ACL, production decryption
+│   │   ├── solidity.md              # Encrypted Solidity router + config
+│   │   ├── erc7984.md               # Confidential token recipe + interface
+│   │   ├── fhe-advanced.md          # Raw FHE ops, manual ACL, production decryption
 │   │   └── setups/
-│   │       ├── foundry.md          # Default
+│   │       ├── foundry.md           # Default
 │   │       └── hardhat.md
 │   └── typescript/
-│       ├── typescript.md           # SDK mental model + environment matrix
+│       ├── typescript.md            # SDK mental model + environment matrix
 │       └── setups/
-│           ├── react-wagmi.md      # Default
+│           ├── react-wagmi.md       # Default
 │           ├── browser-viem.md
 │           ├── browser-ethers.md
 │           ├── node-backend.md
 │           ├── extension-mv3.md
 │           └── local-hardhat.md
-├── .claude-plugin/plugin.json
-├── index.html
-└── vercel.json
+├── CLAUDE.md                        # this file
+└── README.md
 ```
 
 ## Key Rules
@@ -60,8 +61,7 @@ fheskills/
 ## Editing the skill
 
 1. Edit `SKILL.md` for the top-level router, or the relevant file under `references/`.
-2. Test locally: `python3 -m http.server 8000` from this directory.
-3. Verify at `http://localhost:8000`.
+2. Bump the version in `.claude-plugin/marketplace.json` — that's the single source of truth. The plugin manifest at `.claude-plugin/plugin.json` does not carry a `version` field.
 
 ### Before adding content
 
@@ -78,10 +78,6 @@ When a user needs to start or configure a project, point them at the per-environ
 - **TypeScript:** `references/typescript/setups/` — one file per stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
 
 Setup content lives in those files on purpose — it's where it gets tested and kept current. Don't duplicate setup steps into the top-level routers or link out to external starter templates.
-
-## Deployment
-
-Static markdown on Vercel. No build step. Automatic on push to `main`.
 
 ## References
 
