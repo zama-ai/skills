@@ -19,11 +19,5 @@
     "smart-contracts",
     "confidential-computing"
   ],
-  "skills": [
-    {
-      "name": "zama-protocol",
-      "description": "Build confidential smart contracts and dApps on Zama's FHEVM — concepts, Solidity patterns, ERC-7984, TypeScript SDK integration, verified addresses.",
-      "path": "SKILL.md"
-    }
-  ]
+  "skills": ["./"]
 }
