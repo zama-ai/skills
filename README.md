@@ -1,4 +1,4 @@
-# FHESKILLS
+# zama-protocol
 
 The missing knowledge between AI agents and production encrypted smart contracts.
 
@@ -6,7 +6,27 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 ## What is this?
 
-A single skill that teaches AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
+A single Claude Code skill that teaches AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
+
+## Install
+
+Inside any Claude Code session, run:
+
+```
+/plugin marketplace add zama-ai/skills
+/plugin install zama-protocol@zama-skills
+```
+
+The skill triggers automatically when you mention FHE, FHEVM, confidential contracts, ERC-7984, or the Zama SDK. To pull updates later, run `/plugin marketplace update zama-skills`.
+
+<details>
+<summary><b>Manual clone + symlink</b> — no plugin system required</summary>
+
+```bash
+git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
+ln -s ~/src/zama-skills ~/.claude/skills/zama-protocol
+```
+</details>
 
 ## One Skill, Many References
 
@@ -26,12 +46,6 @@ references/
 └── typescript/
     ├── typescript.md
     └── setups/{react-wagmi,browser-viem,browser-ethers,node-backend,extension-mv3,local-hardhat}.md
-```
-
-## Quick Start
-
-```
-https://fheskills.com/SKILL.md
 ```
 
 ## What AI Agents Get Wrong About FHE
@@ -63,12 +77,6 @@ Setup instructions live in the per-environment files so they stay testable and c
 - **TypeScript** — pick one file from [`references/typescript/setups/`](references/typescript/setups/) matching your stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
 
 For any confidential token work, use [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — never reimplement encrypted balances.
-
-## URL Pattern
-
-```
-https://fheskills.com/<skill>/SKILL.md
-```
 
 ## License
 
