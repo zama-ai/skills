@@ -32,7 +32,12 @@ skills-repo/                         ← this repo (zama-ai/skills)
 │           │       ├── foundry.md   # Default
 │           │       └── hardhat.md
 │           └── typescript/
-│               ├── typescript.md    # SDK mental model + environment matrix
+│               ├── typescript.md    # SDK router + environment matrix
+│               ├── sdk-package-and-signers.md
+│               ├── sdk-token-flows.md
+│               ├── sdk-custom-contract-flows.md
+│               ├── sdk-permissions-and-sessions.md
+│               ├── react-sdk.md
 │               └── setups/
 │                   ├── react-wagmi.md
 │                   ├── browser-viem.md

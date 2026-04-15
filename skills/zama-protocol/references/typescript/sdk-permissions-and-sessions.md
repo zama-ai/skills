@@ -1,0 +1,51 @@
+# SDK permissions and sessions
+
+Use this note for session signatures, decrypt authorization, delegation, and session teardown.
+
+Do not describe this as "credentials" unless quoting an existing API name. The user-facing concept is session authorization.
+
+## Session model in one sentence
+
+The SDK needs a wallet signature to authorize decrypt access for specific contracts; check it with `isAllowed` / `useIsAllowed`, request it with `allow` / `useAllow`, and avoid triggering it invisibly.
+
+## Main APIs
+
+### Session authorization
+
+- Core SDK: `allow`, `isAllowed`, `revoke`, `revokeSession`
+- React SDK: `useAllow`, `useIsAllowed`, `useRevoke`, `useRevokeSession`
+
+Use this for user-owned decrypt flows such as balance reads or custom-contract outputs.
+
+### Delegation
+
+- Core SDK: `delegateDecryption`, `revokeDelegation`, `delegationStatus`, `decryptBalanceAs`, `batchDecryptBalancesAs`
+- React hooks: `useDelegateDecryption`, `useRevokeDelegation`, `useDecryptBalanceAs`, `useDelegationStatus`
+
+Use delegation when another address or service needs permission to decrypt on behalf of a user.
+
+## Practical rules
+
+- Check permission before a decrypting read.
+- If missing, show an explicit button and call `allow`.
+- Pass query `enabled` flags so decrypting queries do not prompt on render.
+- Signer lifecycle subscriptions can revoke sessions on disconnect or account change, so manual teardown is not always necessary.
+- Use `useRevokeSession` for sign-out/security-reset flows, not after every operation.
+
+## TTL rules
+
+- `sessionTTL` controls how long the wallet signature remains valid.
+- Short TTLs produce more prompts but reduce exposure.
+- Long or infinite TTLs improve UX but should be a conscious product decision.
+- Do not simulate short TTLs by revoking after every balance read; that creates bad UX and repeated wallet prompts.
+
+## Scope rules
+
+- Scope permissions to the exact contract addresses needed.
+- For custom FHE contracts, the decrypt handle's `contractAddress` must match the producing contract.
+- For token flows, pair this note with `sdk-token-flows.md` because wrapper/token addresses matter.
+
+## Related
+
+- `react-sdk.md`
+- `sdk-package-and-signers.md`

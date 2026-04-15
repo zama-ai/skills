@@ -36,7 +36,7 @@ Your job: help developers understand the protocol, plan their architecture, and 
 
 **You sent transactions to the Gateway directly.** The Relayer is the only public entry point. All input proofs, decryption requests, and key material retrieval go through the Relayer HTTPS API.
 
-**you are not using ERC7984** you are using a normal erc20 token,
+**Do not force ERC-7984 onto non-token apps.** Use ERC-7984 for confidential fungible tokens. Use custom FHE contract flows for voting, auctions, identity, games, and other non-token applications.
 
 ---
 
@@ -359,7 +359,7 @@ When users encrypt values client-side (using `@zama-fhe/sdk`), they must prove t
 | Per-tx depth (`maxHCUDepthPerTx`) | 5,000,000 | Sequential depth limit |
 | Per-block global (`globalHCUCapPerBlock`) | 5,000,000 | Cap for non-whitelisted accounts |
 
-For per-operation HCU costs, see `solidity/SKILL.md` (HCU section).
+For per-operation HCU costs, see `references/solidity/solidity.md` (HCU section).
 
 **Optimization rules:**
 - Use **scalar operations** when one operand is plaintext (always cheaper)

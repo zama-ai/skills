@@ -1,6 +1,6 @@
 # Node.js backend setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/guides/node-js-backend.md`
+**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/node-js-backend.md`
 
 Also the pattern for **React Native / mobile**: expose `/encrypt` and `/user-decrypt` HTTP endpoints and forward from the app.
 
@@ -60,4 +60,10 @@ app.post("/api/transfer", (req, res) => {
 });
 ```
 
-See `guides/node-js-backend.md` for the full per-request isolation pattern.
+Use `RelayerCleartext` instead of `RelayerNode` only for local dev or chains where Zama Protocol has not deployed the full listener/relayer stack yet.
+
+Next read:
+
+- `../sdk-package-and-signers.md`
+- `../sdk-token-flows.md`
+- `../sdk-custom-contract-flows.md`

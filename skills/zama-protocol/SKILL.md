@@ -27,15 +27,18 @@ References are nested by domain. The Solidity and TypeScript folders each have a
 | Hand-written FHE ops, manual ACL, production decryption | `references/solidity/solidity.md` + `references/solidity/fhe-advanced.md` |
 | Setting up a Foundry project | `references/solidity/setups/foundry.md` *(default)* |
 | Setting up a Hardhat project | `references/solidity/setups/hardhat.md` |
-| Frontend/backend integration (any TS) | `references/typescript/typescript.md` + one setup file |
-| React + wagmi frontend | `references/typescript/setups/react-wagmi.md` *(default)* |
-| Browser with viem / ethers | `references/typescript/setups/browser-viem.md` / `browser-ethers.md` |
-| Node.js script or server | `references/typescript/setups/node-backend.md` |
+| Integrating `@zama-fhe/sdk` or `@zama-fhe/react-sdk` | `references/typescript/typescript.md` |
+| React app using hooks/providers | `references/typescript/typescript.md` + `references/typescript/setups/react-wagmi.md` + `references/typescript/react-sdk.md` |
+| Browser app with viem or ethers | `references/typescript/typescript.md` + `references/typescript/setups/browser-viem.md` / `references/typescript/setups/browser-ethers.md` |
+| Node.js script, backend, or custom signer | `references/typescript/typescript.md` + `references/typescript/setups/node-backend.md` + `references/typescript/sdk-package-and-signers.md` |
+| ERC-7984 token flows from the SDK | `references/typescript/sdk-token-flows.md` |
+| Custom FHE contract flows from TypeScript/React | `references/typescript/sdk-custom-contract-flows.md` |
+| Decryption permissions, session TTL, delegation | `references/typescript/sdk-permissions-and-sessions.md` |
 | Browser extension (MV3) | `references/typescript/setups/extension-mv3.md` |
-| Local dev with cleartext relayer | `references/typescript/setups/local-hardhat.md` |
+| Local dev or unsupported chain using cleartext relayer | `references/typescript/setups/local-hardhat.md` |
 | Any verified contract address | `references/addresses.md` — **never guess addresses** |
 
-When in doubt, start with `concepts.md` — it routes you through the rest phase by phase.
+For SDK questions, prefer `references/typescript/typescript.md` before `concepts.md`. Only load `concepts.md` when the question is architectural or protocol-level rather than about SDK usage.
 
 ---
 

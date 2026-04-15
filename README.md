@@ -45,6 +45,11 @@ references/
 │   └── setups/{foundry,hardhat}.md
 └── typescript/
     ├── typescript.md
+    ├── sdk-package-and-signers.md
+    ├── sdk-token-flows.md
+    ├── sdk-custom-contract-flows.md
+    ├── sdk-permissions-and-sessions.md
+    ├── react-sdk.md
     └── setups/{react-wagmi,browser-viem,browser-ethers,node-backend,extension-mv3,local-hardhat}.md
 ```
 
@@ -71,10 +76,11 @@ Only red and purple lines survive.
 
 ## Getting started as a developer
 
-Setup instructions live in the per-environment files so they stay testable and current:
+Setup instructions live in the per-environment files so they stay testable and current. Task-specific SDK usage lives in the TypeScript reference files:
 
-- **Solidity** — [`references/solidity/setups/foundry.md`](references/solidity/setups/foundry.md) (default) or [`references/solidity/setups/hardhat.md`](references/solidity/setups/hardhat.md)
-- **TypeScript** — pick one file from [`references/typescript/setups/`](references/typescript/setups/) matching your stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
+- **Solidity** — [`skills/zama-protocol/references/solidity/setups/foundry.md`](skills/zama-protocol/references/solidity/setups/foundry.md) (default) or [`skills/zama-protocol/references/solidity/setups/hardhat.md`](skills/zama-protocol/references/solidity/setups/hardhat.md)
+- **TypeScript environments** — pick one file from [`skills/zama-protocol/references/typescript/setups/`](skills/zama-protocol/references/typescript/setups/) matching your stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
+- **TypeScript tasks** — use the focused files in [`skills/zama-protocol/references/typescript/`](skills/zama-protocol/references/typescript/) for token flows, custom-contract flows, permissions/sessions, React SDK patterns, and signer/migration guidance
 
 For any confidential token work, use [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — never reimplement encrypted balances.
 

@@ -1,6 +1,6 @@
 # MV3 browser extension setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/guides/web-extensions.md`
+**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/web-extensions.md`
 
 The problem: MV3 service workers can be terminated after 30s idle. In-memory session state (wallet signature) is lost, forcing a re-sign on every interaction. Fix: pass **`chromeSessionStorage` as `sessionStorage`** (not as `storage`) — `chrome.storage.session` survives worker restarts.
 

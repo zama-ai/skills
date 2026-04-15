@@ -1,6 +1,6 @@
 # Browser + ethers setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/tutorials/quick-start.md` (ethers tab)
+**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (ethers tab)
 
 ```bash
 pnpm add @zama-fhe/sdk ethers
@@ -32,4 +32,4 @@ await token.shield(1000n);
 await token.confidentialTransfer("0xRecipient", 500n);
 ```
 
-Needs COOP/COEP headers — see `skill.md` → Universal gotchas.
+Needs COOP/COEP headers - see `../typescript.md` Universal SDK gotchas.

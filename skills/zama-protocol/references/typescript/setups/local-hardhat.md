@@ -1,6 +1,6 @@
 # Local Hardhat / cleartext setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/guides/local-development.md`
+**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/local-development.md`
 
 For local Hardhat nodes and custom testnets deployed in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. Drop-in replacement for `RelayerWeb`/`RelayerNode`; the rest of your code is unchanged.
 

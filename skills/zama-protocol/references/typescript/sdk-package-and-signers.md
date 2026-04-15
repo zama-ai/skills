@@ -1,0 +1,84 @@
+# SDK packages, sub-paths, and signers
+
+Use this note when the question is about package choice, sub-path imports, relayer/runtime choice, or `GenericSigner`.
+
+## Package map
+
+| Need | Package |
+|---|---|
+| Core SDK in browser or Node.js | `@zama-fhe/sdk` |
+| React hooks and `ZamaProvider` | `@zama-fhe/react-sdk` |
+| viem signer adapter | `@zama-fhe/sdk/viem` |
+| ethers signer adapter | `@zama-fhe/sdk/ethers` |
+| React + wagmi signer adapter | `@zama-fhe/sdk/viem` |
+| Node.js relayer/runtime helpers | `@zama-fhe/sdk/node` |
+| Cleartext runtime for local or unsupported chains | `@zama-fhe/sdk/cleartext` |
+
+## Runtime choice
+
+| Runtime | Use |
+|---|---|
+| `RelayerWeb` | Browser apps and React apps |
+| `RelayerNode` | Node.js scripts, servers, jobs, workers |
+| `RelayerCleartext` | Local Hardhat, Hoodi-style demos, unsupported-chain testing |
+
+Do not use `RelayerCleartext` as a production privacy backend.
+
+## Built-in signer rules
+
+| Stack | Signer |
+|---|---|
+| React + wagmi | `ViemSigner` |
+| Browser + viem | `ViemSigner` |
+| Browser + ethers | `EthersSigner({ ethereum: window.ethereum })` |
+| Node.js + viem | `ViemSigner({ walletClient, publicClient })` |
+| Node.js + ethers | `EthersSigner({ signer: wallet })` |
+
+The browser and Node.js ethers cases are different. In browser code, `EthersSigner` takes the raw EIP-1193 provider. In Node.js, it takes an ethers signer instance.
+
+Do not recommend `WagmiSigner` from `@zama-fhe/react-sdk/wagmi` until its upstream bundling issue is fixed. Use wagmi for UI/account state and build a `ViemSigner` after connect.
+
+## `GenericSigner`
+
+Only implement `GenericSigner` when the built-in adapters do not fit the wallet provider. Typical cases:
+
+- embedded wallets
+- custom MPC signers
+- service-side signers
+- proprietary wallet SDKs
+
+Required methods:
+
+- `getChainId()`
+- `getAddress()`
+- `signTypedData()`
+- `writeContract()`
+- `readContract()`
+- `waitForTransactionReceipt()`
+- optional `subscribe()` for account/chain/disconnect lifecycle events
+
+Prefer adapting the wallet at the signer boundary rather than rewriting SDK flows around it.
+
+## Legacy integration migration
+
+If the codebase has old relayer helpers, app-local encrypt/decrypt wrappers, hardcoded wrapper addresses, or decrypt prompts triggered on render:
+
+- move runtime setup into one provider/bootstrap layer
+- prefer built-in signer adapters before implementing `GenericSigner`
+- replace ERC-7984 hand wiring with high-level token APIs
+- keep custom FHE contracts on the `encrypt` / `userDecrypt` path
+- replace implicit decrypt prompts with the explicit `useIsAllowed` / `useAllow` pattern
+- prefer registry or discovery helpers over hardcoded wrapper addresses
+
+## Sub-path rule of thumb
+
+- React app -> start from `@zama-fhe/react-sdk` plus `@zama-fhe/sdk` as an explicit peer
+- Non-React TypeScript app -> start from `@zama-fhe/sdk`
+- Pull signer adapters from the matching sub-path rather than reimplementing them
+
+## Related
+
+- `setups/react-wagmi.md`
+- `setups/browser-viem.md`
+- `setups/browser-ethers.md`
+- `setups/node-backend.md`

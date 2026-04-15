@@ -1,6 +1,6 @@
 # Browser + viem setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/tutorials/quick-start.md` (viem tab)
+**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (viem tab)
 
 ```bash
 pnpm add @zama-fhe/sdk viem
@@ -44,4 +44,4 @@ await token.confidentialTransfer("0xRecipient", 500n);
 await token.unshield(500n);
 ```
 
-Vite needs COOP/COEP headers — see `skill.md` → Universal gotchas.
+Vite needs COOP/COEP headers - see `../typescript.md` Universal SDK gotchas.

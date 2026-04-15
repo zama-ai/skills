@@ -1,6 +1,9 @@
 # React + wagmi setup
 
-**Canonical doc:** `github.com/zama-ai/sdk/docs/gitbook/src/tutorials/quick-start.md` (React + wagmi tab)
+**Canonical docs:**
+
+- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (React + wagmi tab)
+- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/reference/react/ZamaProvider.md`
 
 ```bash
 pnpm add @zama-fhe/react-sdk @zama-fhe/sdk \
@@ -76,6 +79,8 @@ Opt the root layout out of prerender:
 export const dynamic = "force-dynamic";
 ```
 
-## Custom FHE contracts (auctions, voting, non-token)
+Next read:
 
-Use `useEncrypt` + `useUserDecrypt` directly. See `guides/encrypt-decrypt.md`.
+- `../react-sdk.md` for provider/storage, hook selection, and decrypt UX
+- `../sdk-token-flows.md` for ERC-7984 token flows
+- `../sdk-custom-contract-flows.md` for non-token FHE contracts
