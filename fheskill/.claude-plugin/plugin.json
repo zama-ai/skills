@@ -1,6 +1,5 @@
 {
   "name": "fheskill",
-  "version": "0.1.0",
   "description": "The missing knowledge between AI agents and production encrypted smart contracts. FHE on Ethereum — encrypted types, ACL, patterns, security, deployment.",
   "author": {
     "name": "Zama Team",

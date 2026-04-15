@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Zama skills for AI agents — the missing knowledge between models and production encrypted smart contracts.",
-    "version": "1.0.0"
+    "version": "0.1.0"
   },
   "plugins": [
     {
