@@ -30,11 +30,14 @@ references/
     └── setups/{react-wagmi,browser-viem,browser-ethers,node-backend,extension-mv3,local-hardhat}.md
 ```
 
-## Quick Start
+## Install
 
 ```
-https://fheskills.com/SKILL.md
+/plugin marketplace add zama-ai/skills
+/plugin install fheskill@zama-skills
 ```
+
+See the [repo root README](../../README.md) for alternatives (manual clone, git submodule, etc.).
 
 ## What AI Agents Get Wrong About FHE
 

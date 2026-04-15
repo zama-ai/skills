@@ -37,4 +37,4 @@ references/
 /plugin install fheskill@zama-skills
 ```
 
-Or fetch on demand: `https://fheskills.com/SKILL.md`. See the [repo root README](../README.md) for all install options.
+See the [repo root README](../../README.md) for alternatives (manual clone, git submodule).

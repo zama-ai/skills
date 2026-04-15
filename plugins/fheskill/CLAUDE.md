@@ -6,18 +6,17 @@ Guidance for Claude Code when working in this repository.
 
 **fheskill** — the external-facing skill for AI agents building confidential smart contracts with Zama's FHEVM.
 
-- **Deployed:** https://fheskills.com
 - **Install:** `/plugin marketplace add zama-ai/skills && /plugin install fheskill@zama-skills`
 - **License:** BSD-3-Clause-Clear
 
-This directory is one skill inside the [`zama-ai/skills`](https://github.com/zama-ai/skills) marketplace repo. The repo root carries `.claude-plugin/marketplace.json` and a top-level README; this file is what ships when someone installs the `fheskill` plugin.
+This directory is one skill inside the [`zama-ai/skills`](https://github.com/zama-ai/skills) marketplace repo. It lives at `plugins/fheskill/` within the repo. The repo root carries `.claude-plugin/marketplace.json` (with `metadata.pluginRoot: "./plugins"`) and a top-level README; this file is what ships when someone installs the `fheskill` plugin.
 
 ## Structure
 
-The skill is named `fheskill` (frontmatter `name: fheskill`). `SKILL.md` at this directory's root is the router that always loads; everything else under `references/` is read on demand.
+The skill is named `fheskill` (frontmatter `name: fheskill`). `SKILL.md` in this directory is the router that always loads; everything under `references/` is read on demand.
 
 ```
-fheskills/
+plugins/fheskill/
 ├── SKILL.md                        # Router — gotchas + task → reference map (always loaded)
 ├── AGENTS.md                       # Agent discovery
 ├── references/
@@ -40,8 +39,9 @@ fheskills/
 │           ├── extension-mv3.md
 │           └── local-hardhat.md
 ├── .claude-plugin/plugin.json
-├── index.html
-└── vercel.json
+├── CLAUDE.md                       # this file
+├── AGENTS.md
+└── README.md
 ```
 
 ## Key Rules
@@ -62,8 +62,7 @@ fheskills/
 ## Editing the skill
 
 1. Edit `SKILL.md` for the top-level router, or the relevant file under `references/`.
-2. Test locally: `python3 -m http.server 8000` from this directory.
-3. Verify at `http://localhost:8000`.
+2. Bump the version in `.claude-plugin/marketplace.json` (repo root) — for relative-path plugins, that's the single source of truth; the plugin's own `plugin.json` must not carry a `version` field.
 
 ### Before adding content
 
@@ -80,10 +79,6 @@ When a user needs to start or configure a project, point them at the per-environ
 - **TypeScript:** `references/typescript/setups/` — one file per stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
 
 Setup content lives in those files on purpose — it's where it gets tested and kept current. Don't duplicate setup steps into the top-level routers or link out to external starter templates.
-
-## Deployment
-
-Static markdown on Vercel. No build step. Automatic on push to `main`.
 
 ## References
 
