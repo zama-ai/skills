@@ -1,6 +1,17 @@
 # zama-ai/skills
 
-Claude Code skills published by Zama. Each subdirectory is a standalone skill with its own `SKILL.md`, references, and plugin manifest. The repo root carries the marketplace index.
+Claude Code skills published by Zama. Each subdirectory is a standalone skill with its own `SKILL.md` and references. The repo root carries the marketplace index.
+
+## Install
+
+Inside any Claude Code session, run these two commands:
+
+```
+/plugin marketplace add zama-ai/skills
+/plugin install fheskill@zama-skills
+```
+
+That's it. The `fheskill` plugin is now installed and will trigger automatically when you mention FHEVM, confidential contracts, ERC-7984, or the Zama SDK. To pull updates later, run `/plugin marketplace update zama-skills`.
 
 ## Skills
 
@@ -8,26 +19,10 @@ Claude Code skills published by Zama. Each subdirectory is a standalone skill wi
 |-------|--------------|
 | [`fheskill`](./fheskill) | Build confidential smart contracts and dApps on Zama's FHEVM — FHE concepts, Solidity patterns (encrypted types, ACL, HCU, ERC-7984), TypeScript SDK integration, verified addresses. |
 
-## Install
+## Other install methods
 
-### Claude Code plugin marketplace
-
-Add this repo as a marketplace once, then install any skill from it:
-
-```
-/plugin marketplace add zama-ai/skills
-/plugin install fheskill@zama-skills
-```
-
-To update later:
-
-```
-/plugin marketplace update zama-skills
-```
-
-### Manual install
-
-Clone the repo and symlink the skill into your Claude skills directory:
+<details>
+<summary><b>Manual clone + symlink</b> — no plugin system required</summary>
 
 ```bash
 git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
@@ -39,16 +34,19 @@ Or copy into a project's local skills folder:
 ```bash
 cp -r ~/src/zama-skills/fheskill ./.claude/skills/fheskill
 ```
+</details>
 
-### Fetch on demand (no install)
+<details>
+<summary><b>Fetch on demand</b> — no install, always latest</summary>
 
-Agents that support URL fetch can pull the router directly — no install step, always the latest:
+Any agent or tool that supports HTTP fetch can pull the router directly:
 
 ```
 https://fheskills.com/SKILL.md
 ```
 
-Per-task references are linked from the router and are fetched as needed under `https://fheskills.com/references/...`.
+Per-task references are linked from the router and fetched as needed under `https://fheskills.com/references/…`.
+</details>
 
 ## Layout
 
@@ -57,6 +55,7 @@ skills/                              ← this repo
 ├── .claude-plugin/
 │   └── marketplace.json             ← marketplace index
 ├── README.md                        ← you are here
+├── vercel.json                      ← rewrites / → /fheskill for fheskills.com
 └── fheskill/                        ← the skill
     ├── SKILL.md                     ← always-loaded router
     ├── .claude-plugin/plugin.json
@@ -68,11 +67,10 @@ skills/                              ← this repo
     ├── AGENTS.md
     ├── CLAUDE.md
     ├── README.md
-    ├── index.html
-    └── vercel.json
+    └── index.html
 ```
 
-Future skills live as sibling subdirectories — `./fheskill`, `./other-skill`, etc. — and get added to `marketplace.json`.
+Future skills live as sibling subdirectories (`./fheskill`, `./other-skill`, …) and get added to `marketplace.json`.
 
 ## License
 
