@@ -33,7 +33,7 @@ For decrypting reads, especially balances or custom decrypted results:
 3. call `useAllow`
 4. enable the decrypting query or component only when allowed
 
-This avoids blind signing on render and makes wallet prompts understandable. The same pattern is used in confidential-defi prior art: `usePrivateDataAccess(...)` gates `useConfidentialBalance(..., { enabled: isAllowed })` in `packages/app/src/hooks/use-wallet-holdings.ts` at `https://github.com/zama-ai/confidential-defi/blob/e01bf249d5a25cc58788285ded1622c2bc2f4d89/packages/app/src/hooks/use-wallet-holdings.ts`.
+This avoids blind signing on render and makes wallet prompts understandable.
 
 Token example:
 

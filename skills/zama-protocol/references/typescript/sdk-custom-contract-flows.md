@@ -33,7 +33,7 @@ For non-React TypeScript integrations:
 ## Rules that matter most
 
 - The target `contractAddress` used during encryption must match the contract that consumes the input.
-- Convert binary outputs to the ABI type expected by the contract call.
+- `encrypt()` returns `Uint8Array` handles and proof; convert them with viem `bytesToHex` or ethers `hexlify` before passing them to contract calls.
 - Gate decrypt operations behind the session-authorization checks instead of surprising the user with a wallet popup.
 - Keep token guidance and custom-contract guidance separate. ERC-7984 helpers are not the generic answer here.
 
