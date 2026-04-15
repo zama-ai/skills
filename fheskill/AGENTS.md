@@ -32,6 +32,9 @@ references/
 
 ## Install
 
-```bash
-npx skills add zama-ai/fheskills
 ```
+/plugin marketplace add zama-ai/skills
+/plugin install fheskill@zama-skills
+```
+
+Or fetch on demand: `https://fheskills.com/SKILL.md`. See the [repo root README](../README.md) for all install options.

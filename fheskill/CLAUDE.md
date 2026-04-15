@@ -4,15 +4,17 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-**fheskills** — the external-facing skill set for AI agents building confidential smart contracts with Zama's FHEVM.
+**fheskill** — the external-facing skill for AI agents building confidential smart contracts with Zama's FHEVM.
 
 - **Deployed:** https://fheskills.com
-- **Install:** `npx skills add zama-ai/fheskills`
+- **Install:** `/plugin marketplace add zama-ai/skills && /plugin install fheskill@zama-skills`
 - **License:** BSD-3-Clause-Clear
+
+This directory is one skill inside the [`zama-ai/skills`](https://github.com/zama-ai/skills) marketplace repo. The repo root carries `.claude-plugin/marketplace.json` and a top-level README; this file is what ships when someone installs the `fheskill` plugin.
 
 ## Structure
 
-This repo **is** a single skill (`name: zama`). `SKILL.md` at the root is the router that always loads; everything else under `references/` is read on demand.
+The skill is named `fheskill` (frontmatter `name: fheskill`). `SKILL.md` at this directory's root is the router that always loads; everything else under `references/` is read on demand.
 
 ```
 fheskills/

@@ -1,10 +1,15 @@
 {
+  "cleanUrls": false,
+  "trailingSlash": false,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/$1" }
+    { "source": "/", "destination": "/fheskill/index.html" },
+    { "source": "/index.html", "destination": "/fheskill/index.html" },
+    { "source": "/SKILL.md", "destination": "/fheskill/SKILL.md" },
+    { "source": "/references/(.*)", "destination": "/fheskill/references/$1" }
   ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/(.*\\.md)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },

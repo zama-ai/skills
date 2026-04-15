@@ -1,9 +1,9 @@
 ---
-name: zama
+name: fheskill
 description: Build confidential smart contracts and dApps on Zama's FHEVM (Fully Homomorphic Encryption on Ethereum). Use whenever the user mentions FHE, FHEVM, Zama, confidential/encrypted/private tokens or contracts, ERC-7984, encrypted balances, private voting, sealed-bid auctions, `@fhevm/solidity`, `@zama-fhe/sdk`, or anything involving computation on encrypted onchain data. Covers FHE concepts, Solidity patterns (encrypted types, ACL, HCU gas, ERC-7984), TypeScript SDK integration (React/viem/ethers/Node/MV3), verified contract addresses, and Foundry/Hardhat setup. Fetch this before writing any FHEVM code — stock model knowledge of this stack is stale or wrong.
 ---
 
-# Zama — FHEVM Development
+# fheskill — FHEVM Development
 
 You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, decryption patterns, what you can compute on ciphertexts, what you can't — stock training data is missing or stale. This skill fills those gaps.
 
