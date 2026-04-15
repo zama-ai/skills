@@ -11,7 +11,8 @@ import { ViemSigner } from "@zama-fhe/sdk/viem";
 const sdk = new ZamaSDK({
   relayer: new RelayerWeb({
     getChainId: () => signer.getChainId(),
-    transports: { [SepoliaConfig.chainId]: { ...SepoliaConfig, relayerUrl: "...", network: "..." } },
+    // Sepolia: spread SepoliaConfig as-is. Only override relayerUrl on mainnet.
+    transports: { [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC } },
   }),
   signer,
   storage: indexedDBStorage,          // encrypted FHE keypair — persistent

@@ -48,7 +48,9 @@ transports: {
 
 ## Universal gotchas
 
-- **Relayer API key.** The relayer needs an API key. Browser apps must proxy through their own backend (keep the key server-side). Node scripts pass `auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly.
+- **Package landscape.** Three `@zama-fhe/*` packages: `sdk` (core), `react-sdk` (hooks — requires `sdk` as a peer dep, install both explicitly), `relayer-sdk` (low-level, usually transitive). Import from `@zama-fhe/react-sdk` in React, from `@zama-fhe/sdk` elsewhere.
+- **Sepolia needs no relayer proxy.** `SepoliaConfig.relayerUrl` already points at the public Zama testnet relayer. Spread `SepoliaConfig` as-is and leave `relayerUrl` alone. Only override it on mainnet.
+- **Relayer API key (mainnet only).** The mainnet relayer needs an API key. Browser apps must proxy through their own backend (keep the key server-side). Node scripts pass `auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly.
 - **COOP/COEP headers required for browser.** `RelayerWeb` uses a Web Worker with WASM + `SharedArrayBuffer`. Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Vite: `server.headers`. Next.js: `async headers()` in config.
 - **Use the high-level token API for ERC-7984.** `sdk.createToken(addr)` returns a `Token` with `.shield`, `.balanceOf`, `.confidentialTransfer`, `.unshield`. Only drop to `useEncrypt`/`useUserDecrypt` for custom FHE contracts (auctions, voting, non-token).
 - **Cleanup in Node.** Call `sdk.terminate()` on shutdown to stop worker threads.

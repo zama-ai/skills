@@ -18,11 +18,9 @@ const sdk = new ZamaSDK({
   relayer: new RelayerWeb({
     getChainId: () => signer.getChainId(),
     transports: {
-      [SepoliaConfig.chainId]: {
-        ...SepoliaConfig,
-        relayerUrl: "https://your-app.com/api/relayer/11155111",
-        network: "https://sepolia.infura.io/v3/YOUR_KEY",
-      },
+      // Sepolia: spread SepoliaConfig as-is. Its relayerUrl already points at
+      // the public testnet relayer. Only override on mainnet (proxy the API key).
+      [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC },
     },
   }),
   signer,

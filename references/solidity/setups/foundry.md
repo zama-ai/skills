@@ -7,8 +7,9 @@ Use **forge-fhevm** — bundles `openzeppelin-confidential-contracts`, `fhevm-so
 ## Install
 
 ```bash
+forge init my-project          # skip if project exists
+cd my-project
 forge install zama-ai/forge-fhevm
-forge remappings > remappings.txt
 ```
 
 ## foundry.toml
@@ -70,7 +71,7 @@ contract MyTokenTest is FhevmTest {
 | Helper | Purpose |
 |---|---|
 | `encryptUint64(value, user, target)` | Encrypted input + proof (also `encryptBool`, `encryptUint8`–`encryptUint256`, `encryptAddress`) |
-| `decrypt(handle)` | Direct decrypt — skips ACL, fastest for assertions |
+| `decrypt(handle)` | Direct decrypt — skips ACL, fastest for assertions. Use this to simulate anything you'd read via public decrypt after `FHE.makePubliclyDecryptable`. |
 | `userDecrypt(handle, user, contract, sig)` | Full ACL + EIP-712 user decrypt |
 | `signUserDecrypt(pk, contract)` | Sign a user decrypt request |
 | `publicDecrypt(handles)` | Decrypt publicly marked handles |
