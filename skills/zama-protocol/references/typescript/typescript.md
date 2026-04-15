@@ -85,12 +85,12 @@ transports: {
 
 All paths are under `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/`:
 
-- `tutorials/quick-start.md`
-- `guides/configuration.md`
-- `guides/authentication.md`
-- `guides/node-js-backend.md`
-- `guides/web-extensions.md`
-- `guides/local-development.md`
-- `guides/encrypt-decrypt.md`
-- `reference/sdk/ZamaSDK.md`, `reference/sdk/Token.md`, `reference/sdk/RelayerWeb.md`, `reference/sdk/RelayerNode.md`, `reference/sdk/network-presets.md`
-- `reference/react/`
+- `tutorials/quick-start.md` - end-to-end setup for supported stacks
+- `guides/configuration.md` - relayer, signer, storage, and network presets
+- `guides/authentication.md` - backend proxy pattern for API keys
+- `guides/node-js-backend.md` - worker pool and per-request isolation
+- `guides/web-extensions.md` - MV3 and `chromeSessionStorage`
+- `guides/local-development.md` - `RelayerCleartext` for Hardhat
+- `guides/encrypt-decrypt.md` - low-level FHE for custom contracts
+- `reference/sdk/` - core SDK classes, token API, relayers, and presets
+- `reference/react/` - React provider and hooks
