@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Zama skills for AI agents — the missing knowledge between models and production encrypted smart contracts.",
-    "version": "0.1.1"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "zama-protocol",
       "source": "./",
-      "description": "Build confidential smart contracts and dApps on Zama's FHEVM — FHE concepts, Solidity patterns, ERC-7984, TypeScript SDK integration, verified addresses.",
-      "version": "0.1.1",
+      "description": "Three skills for building confidential dApps on Zama's FHEVM: zama-protocol (concepts, architecture, addresses), zama-solidity (encrypted Solidity, ACL, ERC-7984), and zama-typescript (SDK integration, React/viem/ethers/Node).",
+      "version": "0.2.0",
       "author": {
         "name": "Zama Team",
         "email": "plugins@zama.ai"
@@ -26,6 +26,7 @@
         "zama",
         "ethereum",
         "solidity",
+        "typescript",
         "encryption",
         "privacy",
         "smart-contracts",

@@ -1,6 +1,6 @@
 {
   "name": "zama-protocol",
-  "description": "The missing knowledge between AI agents and production encrypted smart contracts. FHE on Ethereum — encrypted types, ACL, patterns, security, deployment.",
+  "description": "Three skills for building confidential dApps on Zama's FHEVM: protocol concepts & addresses, encrypted Solidity, and TypeScript SDK integration.",
   "author": {
     "name": "Zama Team",
     "email": "plugins@zama.ai",
@@ -14,6 +14,7 @@
     "zama",
     "ethereum",
     "solidity",
+    "typescript",
     "encryption",
     "privacy",
     "smart-contracts",

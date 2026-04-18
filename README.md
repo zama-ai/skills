@@ -6,7 +6,13 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 ## What is this?
 
-A single Claude Code skill that teaches AI agents (and developers) how to build confidential dApps and SDK integrations with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts and Zama SDK usage.
+A Claude Code plugin containing three skills that teach AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
+
+| Skill | What it covers |
+|-------|---------------|
+| **zama-protocol** | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
+| **zama-solidity** | Encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup |
+| **zama-typescript** | TypeScript SDK — React, browser, Node.js, MV3, token flows, sessions |
 
 ## Install
 
@@ -17,41 +23,21 @@ Inside any Claude Code session, run:
 /plugin install zama-protocol@zama-skills
 ```
 
-The skill triggers automatically when you mention FHE, FHEVM, confidential contracts, ERC-7984, or the Zama SDK. To pull updates later, run `/plugin marketplace update zama-skills`.
+All three skills install together. They trigger automatically based on context — protocol questions load `zama-protocol`, Solidity work loads `zama-solidity`, TypeScript/SDK work loads `zama-typescript`.
+
+To pull updates later, run `/plugin marketplace update zama-skills`.
 
 <details>
 <summary><b>Manual clone + symlink</b> — no plugin system required</summary>
 
 ```bash
 git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
+# Symlink each skill you need:
 ln -s ~/src/zama-skills/skills/zama-protocol ~/.claude/skills/zama-protocol
+ln -s ~/src/zama-skills/skills/zama-solidity ~/.claude/skills/zama-solidity
+ln -s ~/src/zama-skills/skills/zama-typescript ~/.claude/skills/zama-typescript
 ```
 </details>
-
-## One Skill, Many References
-
-Entry point: **[`skills/zama-protocol/SKILL.md`](skills/zama-protocol/SKILL.md)** — the router. It covers the non-negotiable FHEVM gotchas and points at the right reference file for the task at hand.
-
-Reference files live under [`skills/zama-protocol/references/`](skills/zama-protocol/references/), nested by domain:
-
-```
-references/
-├── concepts.md
-├── addresses.md
-├── solidity/
-│   ├── solidity.md
-│   ├── erc7984.md
-│   ├── fhe-advanced.md
-│   └── setups/{foundry,hardhat}.md
-└── typescript/
-    ├── typescript.md
-    ├── sdk-package-and-signers.md
-    ├── sdk-token-flows.md
-    ├── sdk-custom-contract-flows.md
-    ├── sdk-permissions-and-sessions.md
-    ├── react-sdk.md
-    └── setups/{react-wagmi,browser-viem,browser-ethers,node-backend,extension-mv3,local-hardhat}.md
-```
 
 ## What AI Agents Get Wrong About FHE
 
@@ -69,20 +55,8 @@ Every line is classified:
 
 - **Red** — Verified LLM blind spot (stock models get this wrong)
 - **Purple** — Essential human teaching material
-- **Yellow** — LLM knows but skips in practice
-- **Green** — Already known, doesn't need teaching
 
 Only red and purple lines survive.
-
-## Getting started as a developer
-
-Setup instructions live in the per-environment files so they stay testable and current. Task-specific SDK usage lives in the TypeScript reference files:
-
-- **Solidity** — [`skills/zama-protocol/references/solidity/setups/foundry.md`](skills/zama-protocol/references/solidity/setups/foundry.md) (default) or [`skills/zama-protocol/references/solidity/setups/hardhat.md`](skills/zama-protocol/references/solidity/setups/hardhat.md)
-- **TypeScript environments** — pick one file from [`skills/zama-protocol/references/typescript/setups/`](skills/zama-protocol/references/typescript/setups/) matching your stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
-- **TypeScript tasks** — use the focused files in [`skills/zama-protocol/references/typescript/`](skills/zama-protocol/references/typescript/) for token flows, custom-contract flows, permissions/sessions, React SDK patterns, and signer/migration guidance
-
-For any confidential token work, use [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — never reimplement encrypted balances.
 
 ## License
 

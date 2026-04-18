@@ -4,14 +4,20 @@ This file provides guidance to AI coding agents (Claude Code, Cursor, Copilot, e
 
 ## Project
 
-**zama-protocol** — the external-facing Claude Code skill for AI agents building confidential smart contracts with Zama's FHEVM.
+**zama-protocol** — a Claude Code plugin containing three skills for AI agents building confidential smart contracts with Zama's FHEVM.
 
 - **Install:** `/plugin marketplace add zama-ai/skills && /plugin install zama-protocol@zama-skills`
 - **License:** BSD-3-Clause-Clear
 
-## Structure
+## Skills
 
-The repo ships one Claude Code plugin (`zama-protocol`) whose single skill lives at `skills/zama-protocol/SKILL.md`. That file is the always-loaded router; everything under `skills/zama-protocol/references/` is read on demand. `.claude-plugin/marketplace.json` at the repo root makes the whole repo installable via `/plugin marketplace add zama-ai/skills`.
+| Skill | When to use |
+|-------|-------------|
+| `zama-protocol` | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
+| `zama-solidity` | Writing/reviewing encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup |
+| `zama-typescript` | TypeScript SDK integration — React, browser, Node.js, MV3, sessions, token flows |
+
+## Structure
 
 ```
 skills-repo/                         ← this repo (zama-ai/skills)
@@ -19,20 +25,26 @@ skills-repo/                         ← this repo (zama-ai/skills)
 │   ├── marketplace.json             # Marketplace index (single plugin, source: "./")
 │   └── plugin.json                  # Plugin manifest (name: zama-protocol)
 ├── skills/
-│   └── zama-protocol/
-│       ├── SKILL.md                 # Router — gotchas + task → reference map (always loaded)
+│   ├── zama-protocol/
+│   │   ├── SKILL.md                 # Protocol concepts, universal gotchas, cross-references
+│   │   └── references/
+│   │       ├── concepts.md          # FHEVM mental model, planning, production readiness
+│   │       └── addresses.md         # Verified contract addresses
+│   ├── zama-solidity/
+│   │   ├── SKILL.md                 # Solidity router + domain-specific reminders
+│   │   └── references/
+│   │       └── solidity/
+│   │           ├── solidity.md      # Encrypted Solidity router + config
+│   │           ├── erc7984.md       # Confidential token recipe + interface
+│   │           ├── fhe-advanced.md  # Raw FHE ops, manual ACL, production decryption
+│   │           └── setups/
+│   │               ├── foundry.md
+│   │               └── hardhat.md
+│   └── zama-typescript/
+│       ├── SKILL.md                 # TypeScript router + domain-specific reminders
 │       └── references/
-│           ├── concepts.md          # FHEVM mental model, planning, production readiness
-│           ├── addresses.md         # Verified contract addresses
-│           ├── solidity/
-│           │   ├── solidity.md      # Encrypted Solidity router + config
-│           │   ├── erc7984.md       # Confidential token recipe + interface
-│           │   ├── fhe-advanced.md  # Raw FHE ops, manual ACL, production decryption
-│           │   └── setups/
-│           │       ├── foundry.md   # Default
-│           │       └── hardhat.md
 │           └── typescript/
-│               ├── typescript.md    # SDK router + environment matrix
+│               ├── typescript.md    # SDK mental model + environment matrix
 │               ├── sdk-package-and-signers.md
 │               ├── sdk-token-flows.md
 │               ├── sdk-custom-contract-flows.md
@@ -63,32 +75,24 @@ skills-repo/                         ← this repo (zama-ai/skills)
 
 **Use ERC-7984** for any confidential token work. Never reimplement encrypted balances, allowances, or transfers.
 
-**Router + references pattern.** `skills/zama-protocol/SKILL.md` is the single always-loaded router. Domain files (`references/solidity/solidity.md`, `references/typescript/typescript.md` inside `skills/zama-protocol/`) are secondary routers — each has its own `setups/` folder of per-environment files read only when the task needs them. Don't inline setup-specific content into the top-level router.
+**No duplication across skills.** Universal gotchas live in zama-protocol. Domain skills carry only domain-specific reminders and cross-reference zama-protocol for the full set.
 
-## Editing the skill
+## Editing
 
-1. Edit `skills/zama-protocol/SKILL.md` for the top-level router, or the relevant file under `skills/zama-protocol/references/`.
-2. Bump the version in `.claude-plugin/marketplace.json` — that's the single source of truth. The plugin manifest at `.claude-plugin/plugin.json` does not carry a `version` field.
+1. Edit the relevant `skills/<name>/SKILL.md` or files under `skills/<name>/references/`.
+2. Bump the version in `.claude-plugin/marketplace.json` — that's the single source of truth.
 
 ### Before adding content
 
 1. Check official docs: https://docs.zama.ai
-2. Verify the API against the latest `@fhevm/solidity` package.
+2. Verify the API against the latest packages.
 3. Test with a stock LLM — does it actually get this wrong?
 4. If the LLM already knows it AND humans don't need it explained, don't add it.
-
-## Project setup
-
-When a user needs to start or configure a project, point them at the per-environment setup files:
-
-- **Solidity:** `skills/zama-protocol/references/solidity/setups/foundry.md` (default) or `.../hardhat.md`
-- **TypeScript:** `skills/zama-protocol/references/typescript/setups/` — one file per stack (React+wagmi, viem, ethers, Node, MV3, local Hardhat)
-
-Setup content lives in those files on purpose — it's where it gets tested and kept current. Don't duplicate setup steps into the top-level routers or link out to external starter templates.
 
 ## References
 
 - **Zama Docs:** https://docs.zama.ai
 - **Protocol addresses:** https://docs.zama.org/protocol/protocol-apps/addresses
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
+- **SDK:** https://github.com/zama-ai/sdk
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts

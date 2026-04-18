@@ -359,7 +359,7 @@ When users encrypt values client-side (using `@zama-fhe/sdk`), they must prove t
 | Per-tx depth (`maxHCUDepthPerTx`) | 5,000,000 | Sequential depth limit |
 | Per-block global (`globalHCUCapPerBlock`) | 5,000,000 | Cap for non-whitelisted accounts |
 
-For per-operation HCU costs, see `references/solidity/solidity.md` (HCU section).
+For per-operation HCU costs, load the **zama-solidity** skill and see `references/solidity/solidity.md` (HCU section).
 
 **Optimization rules:**
 - Use **scalar operations** when one operand is plaintext (always cheaper)
@@ -416,11 +416,10 @@ For anything involving confidential tokens, use the **ERC-7984** implementation 
 
 ### Choose Your Setup
 
-Setup instructions live in the per-environment files. Read **one** matching your stack:
+Setup instructions live in the domain skills. Load the one matching your stack:
 
-- **Solidity + Foundry** (default) — `references/solidity/setups/foundry.md`
-- **Solidity + Hardhat** — `references/solidity/setups/hardhat.md`
-- **Frontend / backend / extension** — pick one from `references/typescript/setups/` (React+wagmi is the default)
+- **Solidity + Foundry / Hardhat** — load the **zama-solidity** skill
+- **Frontend / backend / extension** — load the **zama-typescript** skill
 
 ### Key Packages
 
@@ -463,11 +462,11 @@ Sepolia testnet does not require an API key.
 
 ## Skill Routing
 
-| Phase | Reference to read |
-|-------|-------------------|
+| Phase | Where |
+|-------|-------|
 | **Planning & architecture** | `references/concepts.md` (this file) |
-| **Writing Solidity contracts** | `references/solidity/solidity.md` |
-| **Building frontend/backend** | `references/typescript/typescript.md` |
+| **Writing Solidity contracts** | **zama-solidity** skill |
+| **Building frontend/backend** | **zama-typescript** skill |
 | **Contract addresses** | `references/addresses.md` |
 
 ---

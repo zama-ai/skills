@@ -1,50 +1,34 @@
 ---
 name: zama-protocol
-description: Build confidential smart contracts and dApps on Zama's FHEVM (Fully Homomorphic Encryption on Ethereum). Use whenever the user mentions FHE, FHEVM, Zama, confidential/encrypted/private tokens or contracts, ERC-7984, encrypted balances, private voting, sealed-bid auctions, `@fhevm/solidity`, `@zama-fhe/sdk`, or anything involving computation on encrypted onchain data. Covers FHE concepts, Solidity patterns (encrypted types, ACL, HCU gas, ERC-7984), TypeScript SDK integration (React/viem/ethers/Node/MV3), verified contract addresses, and Foundry/Hardhat setup. Fetch this before writing any FHEVM code — stock model knowledge of this stack is stale or wrong.
+description: Zama Protocol concepts, architecture, and planning for FHEVM (Fully Homomorphic Encryption on Ethereum). Use when the user asks about FHE concepts, protocol architecture, how the coprocessor/relayer/gateway/KMS works, whether FHE fits their use case, planning a confidential dApp, or needs verified FHEVM contract addresses. Also load this skill first whenever the user mentions FHEVM, Zama, or encrypted onchain computation — it carries the universal gotchas that apply to both Solidity and TypeScript work. For writing Solidity contracts, load the zama-solidity skill. For TypeScript SDK integration, load the zama-typescript skill.
 ---
 
-# Zama — FHEVM Development
+# Zama Protocol — FHEVM Concepts & Architecture
 
-You are probably wrong about FHE on Ethereum. Encrypted types, ACL permissions, decryption patterns, what you can compute on ciphertexts, what you can't — stock training data is missing or stale. This skill fills those gaps.
+You are probably wrong about FHE on Ethereum. How the coprocessor works, what happens onchain vs off-chain, ACL semantics, decryption flow — stock training data is missing or stale. This skill fills those gaps.
 
 **Say "FHEVM"** (uppercase). Not "fhEVM" or "FheVM". Zama convention.
 
 ---
 
-## How to use this skill
+## How to use these skills
 
-This file is a router. It teaches the non-negotiable gotchas that apply to any FHEVM task, then points you at the specific reference file(s) for what you're building. Load references on demand — don't read them all up front.
+This skill covers protocol-level concepts and the universal gotchas. Two companion skills handle implementation:
 
-**Start every FHEVM task by reading the gotchas below.** Then consult references based on the task:
+| Need | Skill |
+|------|-------|
+| Protocol architecture, planning, deciding if FHE fits | **This skill** — read `references/concepts.md` |
+| Verified contract addresses (never guess) | **This skill** — read `references/addresses.md` |
+| Writing or reviewing encrypted Solidity contracts | **zama-solidity** |
+| TypeScript SDK integration (React/viem/ethers/Node) | **zama-typescript** |
 
-References are nested by domain. The Solidity and TypeScript folders each have a router file (`solidity.md`, `typescript.md`) plus a `setups/` folder with per-environment files.
-
-| Task | Read |
-|------|------|
-| Understanding FHEVM, planning a dApp, deciding if FHE is the right tool | `references/concepts.md` |
-| Writing or reviewing encrypted Solidity | `references/solidity/solidity.md` + one setup file |
-| Building a confidential token (ERC-20-like with hidden balances) | `references/solidity/solidity.md` + `references/solidity/erc7984.md` |
-| Hand-written FHE ops, manual ACL, production decryption | `references/solidity/solidity.md` + `references/solidity/fhe-advanced.md` |
-| Setting up a Foundry project | `references/solidity/setups/foundry.md` *(default)* |
-| Setting up a Hardhat project | `references/solidity/setups/hardhat.md` |
-| Integrating `@zama-fhe/sdk` or `@zama-fhe/react-sdk` | `references/typescript/typescript.md` |
-| React app using hooks/providers | `references/typescript/typescript.md` + `references/typescript/setups/react-wagmi.md` + `references/typescript/react-sdk.md` |
-| Browser app with viem or ethers | `references/typescript/typescript.md` + `references/typescript/setups/browser-viem.md` / `references/typescript/setups/browser-ethers.md` |
-| Node.js script, backend, or custom signer | `references/typescript/typescript.md` + `references/typescript/setups/node-backend.md` + `references/typescript/sdk-package-and-signers.md` |
-| ERC-7984 token flows from the SDK | `references/typescript/sdk-token-flows.md` |
-| Custom FHE contract flows from TypeScript/React | `references/typescript/sdk-custom-contract-flows.md` |
-| Decryption permissions, session TTL, delegation | `references/typescript/sdk-permissions-and-sessions.md` |
-| Browser extension (MV3) | `references/typescript/setups/extension-mv3.md` |
-| Local dev or unsupported chain using cleartext relayer | `references/typescript/setups/local-hardhat.md` |
-| Any verified contract address | `references/addresses.md` — **never guess addresses** |
-
-For SDK questions, prefer `references/typescript/typescript.md` before `concepts.md`. Only load `concepts.md` when the question is architectural or protocol-level rather than about SDK usage.
+Load references on demand — don't read them all up front.
 
 ---
 
 ## Non-negotiable gotchas (every FHEVM task)
 
-These are the bugs stock models ship. Internalise them before writing any code.
+These are the bugs stock models ship. Internalise them before writing any code — they apply to both Solidity contracts and TypeScript integrations.
 
 1. **You cannot branch on encrypted values.** `if (FHE.gt(a, b))` does not compile. `FHE.gt` returns an `ebool` the EVM cannot evaluate. Use `FHE.select(cond, ifTrue, ifFalse)` — both branches always execute, which is what makes it private.
 
@@ -70,7 +54,7 @@ These are the bugs stock models ship. Internalise them before writing any code.
 
 12. **Config: inherit `ZamaEthereumConfig` first.** It sets the correct coprocessor addresses (ACL, FHEVMExecutor, KMSVerifier) per `block.chainid` for mainnet, Sepolia, and local Hardhat.
 
-13. **Use ERC-7984 for any confidential token.** Never reimplement encrypted balances, allowances, or transfers. `@openzeppelin/confidential-contracts` has the audited implementation. See `references/solidity/erc7984.md`.
+13. **Use ERC-7984 for any confidential token.** Never reimplement encrypted balances, allowances, or transfers. `@openzeppelin/confidential-contracts` has the audited implementation.
 
 ## Canonical sources
 

@@ -4,7 +4,7 @@ Integrate the Zama FHE SDK into browser apps, React apps, Node.js backends, brow
 
 This file is a router for SDK usage. Choose one environment setup first, then load only the task reference that matches the work.
 
-Skip `references/concepts.md` unless the question is protocol-level, architectural, or about Relayer/Gateway/KMS behavior rather than SDK APIs.
+For protocol-level or architectural questions (Relayer/Gateway/KMS behavior), load the **zama-protocol** skill instead.
 
 ## Canonical docs
 
