@@ -1,0 +1,316 @@
+name: skill-security-scanner-pr
+
+# Scans Claude skills in this repository on every pull request targeting main.
+# Fails the PR if high-severity findings are detected.
+#
+# Deploy this workflow by copying it to .github/workflows/ in the marketplace/skill repo.
+#
+# Scan modes:
+#   simple   — static + behavioral analyzers only; no API keys required; fast.
+#   advanced — superset of simple, adds LLM analysis and VirusTotal file scanning;
+#              requires CLAUDE_CODE_OAUTH_TOKEN and VIRUSTOTAL_API_KEY secrets.
+#
+# Security model:
+#   - Scans the checked-out PR contents; no external repo cloning needed
+#   - Minimal permissions: contents:read only
+#
+# Secrets:
+#   - CLAUDE_CODE_OAUTH_TOKEN (required for advanced mode): Anthropic API key, passed as
+#     SKILL_SCANNER_LLM_API_KEY to the scanner for LLM-based analysis.
+#   - VIRUSTOTAL_API_KEY (required for advanced mode): VirusTotal API key for binary file scanning.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      scan_mode:
+        description: >
+          simple — static/behavioral only (fast, no API keys),
+          advanced — adds LLM + VirusTotal (slow, over 11 mins).
+        type: choice
+        options:
+          - advanced
+          - simple
+        required: false
+        default: 'advanced'
+      llm_model:
+        description: >
+          LiteLLM model string (advanced mode only).
+          anthropic/claude-haiku-4-5-20251001 (default, highest rate limits),
+          anthropic/claude-opus-4-6 (best quality, lowest rate limits).
+        required: false
+        default: 'anthropic/claude-haiku-4-5-20251001'
+
+permissions: {}
+
+concurrency:
+  group: skill-security-scanner-pr-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true  # Cancel superseded runs when a new commit is pushed to the PR
+
+jobs:
+  scan-skills:
+    name: scan-skills-${{ inputs.scan_mode || 'advanced' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read # Checkout repository
+      actions: read  # Resolve artifact download URL via API (GET /actions/runs/{id}/artifacts)
+    env:
+      SKILL_SCANNER_LLM_MODEL: ${{ inputs.llm_model || 'anthropic/claude-haiku-4-5-20251001' }}
+
+    steps:
+
+      # ── Phase 1: Setup ────────────────────────────────────────────────
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
+        with:
+          version: "0.6.14"
+          enable-cache: false
+
+      - name: Install skill-scanner
+        run: |
+          set -euo pipefail
+          uv venv /tmp/skill-scanner-env
+          uv pip install --python /tmp/skill-scanner-env cisco-ai-skill-scanner
+          echo "/tmp/skill-scanner-env/bin" >> "$GITHUB_PATH"
+
+      # ── Phase 2: Scan ─────────────────────────────────────────────────
+
+      - name: Run skill-scanner
+        id: scan
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scan-results
+
+          # Build extra flags based on scan mode
+          EXTRA_FLAGS=""
+          if [ "$SCAN_MODE" = "advanced" ]; then
+            EXTRA_FLAGS="--use-llm --use-virustotal"
+            echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced: LLM + VirusTotal) ..."
+          else
+            echo "Scanning repository skills in $GITHUB_WORKSPACE (simple: static + behavioral) ..."
+          fi
+
+          set +e
+
+          # JSON output — the tool's native format; includes proper skill paths per finding.
+          # SARIF is not used because the scanner's SARIF output does not embed per-skill base
+          # paths (all findings share a single unresolved %SRCROOT% symbol), making it
+          # impossible to correctly resolve file URIs across a multi-skill scan.
+          # shellcheck disable=SC2086
+          skill-scanner scan-all "$GITHUB_WORKSPACE" \
+            --recursive \
+            --use-behavioral \
+            $EXTRA_FLAGS \
+            --policy balanced \
+            --format json \
+            > /tmp/scan-results/results.json \
+            2> /tmp/scan-results/scan.log
+          SCAN_EXIT=$?
+
+          set -e
+
+          echo "scan_exit=$SCAN_EXIT" >> "$GITHUB_OUTPUT"
+
+          RESULTS_CONTENT=$(tr -d '[:space:]' < /tmp/scan-results/results.json 2>/dev/null || true)
+          if [ "$SCAN_EXIT" -eq 0 ] || [ -z "$RESULTS_CONTENT" ]; then
+            echo "scan_status=clean"    >> "$GITHUB_OUTPUT"
+          else
+            echo "scan_status=findings" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          SCAN_MODE: ${{ inputs.scan_mode || 'advanced' }}
+          SKILL_SCANNER_LLM_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+
+      # ── Phase 3: Results ──────────────────────────────────────────────
+      # Note: summary runs before annotation so the Python script receives workspace
+      # paths and can compute correct relative links. The annotation step then rewrites
+      # the JSON for the uploaded artifact.
+
+      - name: Publish step summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - << 'PYEOF'
+          import json, os, sys, urllib.request
+
+          RESULTS      = "/tmp/scan-results/results.json"
+          SUMMARY      = os.environ.get("GITHUB_STEP_SUMMARY")
+          REPO_URL     = "https://github.com/${{ github.repository }}"
+          SCAN_MODE    = "${{ inputs.scan_mode || 'advanced' }}"
+          RUN_ID       = "${{ github.run_id }}"
+          REPO         = "${{ github.repository }}"
+          GH_TOKEN     = os.environ.get("GH_TOKEN", "")
+          WORKSPACE    = os.environ.get("WORKSPACE", "")
+
+          SEV_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+          SEV_EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "INFO": "⚪"}
+
+          if not os.path.exists(RESULTS):
+              print("results.json not found — skipping summary.")
+              sys.exit(0)
+
+          with open(RESULTS) as f:
+              content = f.read().strip()
+
+          if not content:
+              msg = "No skills found in this repository — nothing to scan."
+              print(msg)
+              if SUMMARY:
+                  with open(SUMMARY, "a") as f:
+                      f.write(f"**Skill Security Scan:** {msg}\n")
+              sys.exit(0)
+
+          data = json.loads(content)
+
+          summary  = data.get("summary", {})
+          results  = sorted(
+              data.get("results", []),
+              key=lambda r: (SEV_ORDER.get(r.get("max_severity", "INFO"), 99), r.get("skill_name", "")),
+          )
+
+          mode_label    = "advanced (LLM + VirusTotal)" if SCAN_MODE == "advanced" else "simple (static + behavioral)"
+          artifact_name = f"skill-scan-{SCAN_MODE}-results-{RUN_ID}"
+
+          # Resolve artifact download URL via GitHub API.
+          # https://github.com/{repo}/actions/runs/{run_id}/artifacts/{artifact_id}
+          # triggers a direct zip download when the user is logged in.
+          artifact_url = f"https://github.com/{REPO}/actions/runs/{RUN_ID}"  # fallback
+          try:
+              api_url = f"https://api.github.com/repos/{REPO}/actions/runs/{RUN_ID}/artifacts"
+              req = urllib.request.Request(api_url, headers={
+                  "Authorization": f"Bearer {GH_TOKEN}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              })
+              with urllib.request.urlopen(req, timeout=10) as resp:
+                  artifacts = json.loads(resp.read())
+              match = next((a for a in artifacts.get("artifacts", []) if a["name"] == artifact_name), None)
+              if match:
+                  artifact_url = f"https://github.com/{REPO}/actions/runs/{RUN_ID}/artifacts/{match['id']}"
+          except Exception as e:
+              print(f"Warning: could not resolve artifact download URL: {e}", file=sys.stderr)
+
+          scanned = summary.get("total_skills_scanned", "?")
+          total   = summary.get("total_findings", "?")
+          safe    = summary.get("safe_skills", "?")
+
+          lines = []
+
+          # ── Header: title + metadata table ────────────────────────────
+          lines.append("<strong>Skill Security Scan</strong>")
+          lines.append("")
+          lines.append("<table>")
+          lines.append(f'<tr><td><strong>Target</strong></td><td><a href="{REPO_URL}" target="_blank">{REPO_URL}</a></td></tr>')
+          lines.append(f"<tr><td><strong>Mode</strong></td><td>{mode_label}</td></tr>")
+          lines.append(f"<tr><td><strong>Results</strong></td><td>{scanned} skills scanned — {total} findings ({safe} safe)</td></tr>")
+          lines.append(f'<tr><td><strong>Full report</strong></td><td><a href="{artifact_url}" target="_blank">{artifact_name}</a></td></tr>')
+          lines.append("</table>")
+          lines.append("")
+
+          # ── Per-skill collapsible sections (all skills, all severities) ──
+          if results:
+              lines.append("<details>")
+              lines.append(f"<summary><strong>Skills ({scanned} scanned — {total} findings, {safe} safe)</strong></summary>")
+              lines.append("")
+
+          for r in results:
+              sev        = r.get("max_severity", "INFO")
+              name       = r.get("skill_name", "")
+              skill_path = r.get("skill_path", "")
+              findings   = r.get("findings", [])
+
+              # Strip the workspace prefix to get a short relative path for display.
+              # skill_url uses the full GitHub tree/main URL as href.
+              base_prefix = WORKSPACE.rstrip("/") + "/"
+              if skill_path.startswith(base_prefix):
+                  rel_path = skill_path[len(base_prefix):]
+                  skill_url = f"{REPO_URL}/tree/main/{rel_path}"
+              else:
+                  rel_path = ""
+                  skill_url = REPO_URL
+              display_path = rel_path if rel_path else REPO_URL
+
+              # Always show all 5 severities, even if count is 0
+              tally = {}
+              for f in findings:
+                  tally[f.get("severity", "INFO")] = tally.get(f.get("severity", "INFO"), 0) + 1
+              sev_cells = "".join(
+                  f"<td>{SEV_EMOJI[s]} <strong>{s}</strong>: {tally.get(s, 0)}</td>"
+                  for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+              )
+
+              # Mini table inside <summary>:
+              #   row 1 = status emoji + linked path (colspan=5)
+              #   row 2 = 5 individual severity count cells
+              status = "✅" if r.get("is_safe") else "❌"
+              mini_table = (
+                  f"<table>"
+                  f'<tr><td colspan="5">{status} <a href="{skill_url}" target="_blank"><code>{display_path}</code></a></td></tr>'
+                  f"<tr>{sev_cells}</tr>"
+                  f"</table>"
+              )
+
+              lines.append("<details>")
+              lines.append(f"<summary>{mini_table}</summary>")
+              lines.append("")
+              lines.append("")
+              if findings:
+                  lines.append("| Severity | Rule | Title | File |")
+                  lines.append("|---|---|---|---|")
+                  for f in sorted(findings, key=lambda x: SEV_ORDER.get(x.get("severity", "INFO"), 99)):
+                      fsev  = f.get("severity", "")
+                      fpath = f.get("file_path") or ""
+                      lines.append(f"| {SEV_EMOJI.get(fsev,'')} {fsev} | `{f.get('rule_id','')}` | {f.get('title','')} | `{fpath}` |")
+              lines.append("")
+              lines.append("</details>")
+              lines.append("")
+
+          if results:
+              lines.append("</details>")
+              lines.append("")
+
+          output = "\n".join(lines)
+          if SUMMARY:
+              with open(SUMMARY, "a") as f:
+                  f.write(output + "\n")
+          else:
+              print(output)
+          PYEOF
+
+      - name: Annotate results with repo URL
+        if: always()
+        run: |
+          if [ -f /tmp/scan-results/results.json ]; then
+            sed -i "s|${GITHUB_WORKSPACE}|${REPO_URL}/tree/main|g" /tmp/scan-results/results.json
+          fi
+        env:
+          REPO_URL: https://github.com/${{ github.repository }}
+
+      - name: Upload scan artifact
+        if: always()
+        #   gh api repos/actions/upload-artifact/git/refs/tags/v7 --jq '.object.sha'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: skill-scan-${{ inputs.scan_mode || 'advanced' }}-results-${{ github.run_id }}
+          path: /tmp/scan-results/
+          retention-days: 30
+
+      - name: Fail on Critical and High severity findings
+        if: steps.scan.outputs.scan_status == 'findings'
+        run: |
+          echo "::error::Skill scanner (${{ inputs.scan_mode || 'advanced' }}) found high-severity issues. Review the job summary and the uploaded JSON artifact."
+          exit 1
