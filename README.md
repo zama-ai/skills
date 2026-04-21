@@ -8,15 +8,45 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 A Claude Code plugin containing three skills that teach AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
 
-| Skill | What it covers |
-|-------|---------------|
-| **zama-protocol** | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
-| **zama-solidity** | Encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup |
-| **zama-typescript** | TypeScript SDK — React, browser, Node.js, MV3, token flows, sessions |
+| Skill               | What it covers                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| **zama-protocol**   | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
+| **zama-solidity**   | Encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup                 |
+| **zama-typescript** | TypeScript SDK — React, browser, Node.js, MV3, token flows, sessions                 |
 
-## Install
+## Install using npx skills (for any AI agent)
 
-Inside any Claude Code session, run:
+To install the skills for your favorite agent(s), run:
+
+```
+npx skills add git@github.com:zama-ai/skills.git
+```
+
+If this command fails, you can clone and install manually:
+
+```
+git clone git@github.com:zama-ai/skills.git /tmp/zama-skills
+npx skills add /tmp/zama-skills --list
+npx skills add /tmp/zama-skills
+```
+
+Select all Zama skills: `zama-protocol`, `zama-solidity`, `zama-typescript`. Prefer using a global installation in `~/.agents`.
+
+If you have previously installed these skills in Claude through a marketplace, you can remove them by running in a Claude session:
+
+```
+/plugin marketplace remove zama-skills
+```
+
+To later update your installed skills:
+
+```
+npx skills update
+```
+
+## Install for Claude only
+
+If you prefer installing the skills for Claude only (through a marketplace), run in a Claude session:
 
 ```
 /plugin marketplace add zama-ai/skills
@@ -33,10 +63,12 @@ To pull updates later, run `/plugin marketplace update zama-skills`.
 ```bash
 git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
 # Symlink each skill you need:
-ln -s ~/src/zama-skills/skills/zama-protocol ~/.claude/skills/zama-protocol
-ln -s ~/src/zama-skills/skills/zama-solidity ~/.claude/skills/zama-solidity
-ln -s ~/src/zama-skills/skills/zama-typescript ~/.claude/skills/zama-typescript
+mkdir -p ~/.agents/skills
+ln -s ~/src/zama-skills/skills/zama-protocol ~/.agents/skills/zama-protocol
+ln -s ~/src/zama-skills/skills/zama-solidity ~/.agents/skills/zama-solidity
+ln -s ~/src/zama-skills/skills/zama-typescript ~/.agents/skills/zama-typescript
 ```
+
 </details>
 
 ## What AI Agents Get Wrong About FHE
