@@ -81,6 +81,6 @@ export const dynamic = "force-dynamic";
 
 Next read:
 
-- `../react-sdk.md` for provider/storage, hook selection, and decrypt UX
-- `../sdk-token-flows.md` for ERC-7984 token flows
-- `../sdk-custom-contract-flows.md` for non-token FHE contracts
+- `../react.md` for provider/storage, hook selection, and decrypt UX
+- `../tokens.md` for ERC-7984 token flows
+- `../custom-contracts.md` for non-token FHE contracts

@@ -64,12 +64,12 @@ transports: {
 
 | Need | Read |
 |---|---|
-| Package overview, sub-paths, signer choice, `GenericSigner` | `sdk-package-and-signers.md` |
-| ERC-7984 token integration: shield, transfer, balance, unshield, wrapper discovery | `sdk-token-flows.md` |
-| Custom FHE contracts: encrypt input, read handles, decrypt output | `sdk-custom-contract-flows.md` |
-| Session signatures, `useAllow`, `useRevoke`, delegation, TTLs | `sdk-permissions-and-sessions.md` |
-| React provider, storage, hook selection, decrypt UX | `react-sdk.md` |
-| Migrating older SDK / relayer / FHEVM-style integrations | `sdk-package-and-signers.md` |
+| Package overview, sub-paths, signer choice, `GenericSigner` | `packages-and-signers.md` |
+| ERC-7984 token integration: shield, transfer, balance, unshield, wrapper discovery | `tokens.md` |
+| Custom FHE contracts: encrypt input, read handles, decrypt output | `custom-contracts.md` |
+| Session signatures, `useAllow`, `useRevoke`, delegation, TTLs | `permissions.md` |
+| React provider, storage, hook selection, decrypt UX | `react.md` |
+| Migrating older SDK / relayer / FHEVM-style integrations | `packages-and-signers.md` |
 
 ## Universal gotchas
 
@@ -80,7 +80,7 @@ transports: {
 - **Use the high-level token API for ERC-7984.** `sdk.createToken(addr)` returns a `Token` with `.shield`, `.balanceOf`, `.confidentialTransfer`, `.unshield`. Use `useEncrypt` / `useUserDecrypt` for custom FHE contracts such as auctions and voting.
 - **Encrypt -> ABI conversion.** `encrypt()` returns `handles: Uint8Array[]` and `inputProof: Uint8Array`. Wrap with viem `bytesToHex` or `ethers.hexlify` before passing to contract calls; ABIs expect `bytes32` or `bytes`.
 - **Ciphertexts bind to one target contract.** The `contractAddress` in `encrypt()` must be the contract that will consume it. Encrypt per hop.
-- **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but the same stack also supports custom FHE contracts. Route those cases to `sdk-custom-contract-flows.md`.
+- **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but the same stack also supports custom FHE contracts. Route those cases to `custom-contracts.md`.
 
 ## Canonical doc paths
 

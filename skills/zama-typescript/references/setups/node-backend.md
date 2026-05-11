@@ -60,6 +60,6 @@ Use `RelayerCleartext` instead of `RelayerNode` only for local dev or chains whe
 
 Next read:
 
-- `../sdk-package-and-signers.md`
-- `../sdk-token-flows.md`
-- `../sdk-custom-contract-flows.md`
+- `../packages-and-signers.md`
+- `../tokens.md`
+- `../custom-contracts.md`

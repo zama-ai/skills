@@ -43,9 +43,9 @@ Use delegation when another address or service needs permission to decrypt on be
 
 - Scope permissions to the exact contract addresses needed.
 - For custom FHE contracts, the decrypt handle's `contractAddress` must match the producing contract.
-- For token flows, pair this note with `sdk-token-flows.md` because wrapper/token addresses matter.
+- For token flows, pair this note with `tokens.md` because wrapper/token addresses matter.
 
 ## Related
 
-- `react-sdk.md`
-- `sdk-package-and-signers.md`
+- `react.md`
+- `packages-and-signers.md`

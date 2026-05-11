@@ -17,7 +17,7 @@ Current published landscape (verified against the `zama-ai/sdk` monorepo):
 - **`@zama-fhe/react-sdk`** — React hooks layered on `@zama-fhe/sdk`. Requires `@zama-fhe/sdk` as a peer.
 - **`@zama-fhe/relayer-sdk`** (currently `0.4.x`) — the public lower-level Relayer SDK that `@zama-fhe/sdk` uses **internally** today. Still maintained. Import directly if you need raw relayer types or want to skip the high-level wrapper, but for most apps the wrapper is the right surface.
 
-A future low-level SDK called `@fhevm/sdk` exists inside the FHEVM monorepo (`zama-ai/fhevm/sdk/js-sdk`) but is currently marked `"private": true` — **not yet on npm, not user-facing**. The zama-protocol skill's `references/design/fhevm-sdk.md` describes its internal design.
+A future low-level SDK called `@fhevm/sdk` exists inside the FHEVM monorepo (`zama-ai/fhevm/sdk/js-sdk`) but is currently marked `"private": true` — **not yet on npm, not user-facing**. The zama-protocol skill's `references/sdk-internals.md` describes its internal design.
 
 ---
 
@@ -29,23 +29,23 @@ This file is a router for SDK usage. Choose one environment setup first, then lo
 
 | Environment | File |
 |-------------|------|
-| React + wagmi | `references/typescript/setups/react-wagmi.md` |
-| Browser + viem | `references/typescript/setups/browser-viem.md` |
-| Browser + ethers | `references/typescript/setups/browser-ethers.md` |
-| Node.js (scripts, servers, workers) | `references/typescript/setups/node-backend.md` |
-| MV3 browser extension | `references/typescript/setups/extension-mv3.md` |
-| Local Setup / cleartext | `references/typescript/setups/localhost-setup.md` |
+| React + wagmi | `references/setups/react-wagmi.md` |
+| Browser + viem | `references/setups/browser-viem.md` |
+| Browser + ethers | `references/setups/browser-ethers.md` |
+| Node.js (scripts, servers, workers) | `references/setups/node-backend.md` |
+| MV3 browser extension | `references/setups/extension-mv3.md` |
+| Local Setup / cleartext | `references/setups/localhost-setup.md` |
 
 ### Task references (pick as needed)
 
 | Task | File |
 |------|------|
-| SDK mental model, environment matrix, universal TS gotchas | `references/typescript/typescript.md` |
-| Package overview, sub-paths, signer choice, GenericSigner | `references/typescript/sdk-package-and-signers.md` |
-| ERC-7984 token flows: shield, transfer, balance, unshield | `references/typescript/sdk-token-flows.md` |
-| Custom FHE contracts: encrypt input, read handles, decrypt | `references/typescript/sdk-custom-contract-flows.md` |
-| Session signatures, useAllow, useRevoke, delegation, TTLs | `references/typescript/sdk-permissions-and-sessions.md` |
-| React provider, storage, hook selection, decrypt UX | `references/typescript/react-sdk.md` |
+| SDK mental model, environment matrix, universal TS gotchas | `references/overview.md` |
+| Package overview, sub-paths, signer choice, GenericSigner | `references/packages-and-signers.md` |
+| ERC-7984 token flows: shield, transfer, balance, unshield | `references/tokens.md` |
+| Custom FHE contracts: encrypt input, read handles, decrypt | `references/custom-contracts.md` |
+| Session signatures, useAllow, useRevoke, delegation, TTLs | `references/permissions.md` |
+| React provider, storage, hook selection, decrypt UX | `references/react.md` |
 | Verified contract addresses | `references/addresses.md` — **never guess addresses** |
 
 ---
@@ -68,7 +68,7 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 - **Do not use `WagmiSigner`** from `@zama-fhe/react-sdk/wagmi` until the upstream bundling issue is fixed. Use wagmi for UI/account state and build a `ViemSigner` after connect.
 
-- **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but `useEncrypt` / `useUserDecrypt` support custom FHE contracts (voting, auctions, identity). Route those to `references/typescript/sdk-custom-contract-flows.md`.
+- **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but `useEncrypt` / `useUserDecrypt` support custom FHE contracts (voting, auctions, identity). Route those to `references/custom-contracts.md`.
 
 ## Canonical sources
 

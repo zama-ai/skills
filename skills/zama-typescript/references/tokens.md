@@ -2,7 +2,7 @@
 
 Use this note for SDK integration with ERC-7984 tokens and ERC20 wrappers: shield, confidential balance, confidential transfer, unshield, delegated balance reads, and wrapper discovery.
 
-Do not use this note for custom FHE contracts such as voting or auctions; use `sdk-custom-contract-flows.md`.
+Do not use this note for custom FHE contracts such as voting or auctions; use `custom-contracts.md`.
 
 ## First principle: wrappers and confidential tokens
 
@@ -28,7 +28,7 @@ Typical sequence:
 
 ### 2. Read confidential balance
 
-This is a decrypting read, so session authorization matters. Pair it with `sdk-permissions-and-sessions.md` or `react-sdk.md`.
+This is a decrypting read, so session authorization matters. Pair it with `permissions.md` or `react.md`.
 
 React pattern:
 
@@ -52,7 +52,7 @@ Unshielding is a two-phase flow:
 1. request unwrap / burn confidential amount
 2. finalize unwrap after the proof/event path completes
 
-React apps must handle interrupted flows; see `react-sdk.md` for pending-unshield persistence.
+React apps must handle interrupted flows; see `react.md` for pending-unshield persistence.
 
 ### 5. Resume interrupted unshield
 
@@ -86,6 +86,6 @@ Keep this separate from operator approvals. Operator approvals let someone trans
 
 ## Related
 
-- `sdk-permissions-and-sessions.md`
-- `react-sdk.md`
-- `sdk-custom-contract-flows.md`
+- `permissions.md`
+- `react.md`
+- `custom-contracts.md`

@@ -32,4 +32,4 @@ await token.shield(1000n);
 await token.confidentialTransfer("0xRecipient", 500n);
 ```
 
-Needs COOP/COEP headers - see `../typescript.md` Universal SDK gotchas.
+Needs COOP/COEP headers - see `../overview.md` Universal SDK gotchas.

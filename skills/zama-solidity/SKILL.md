@@ -17,11 +17,11 @@ Load on demand — don't read them all up front.
 
 | Task | Read |
 |------|------|
-| Config, encrypted types, FHE gotchas for contracts | `references/solidity/solidity.md` |
-| Confidential token (encrypted ERC-20, hidden balances) | `references/solidity/erc7984.md` |
-| Hand-written FHE ops, manual ACL, production decryption | `references/solidity/fhe-advanced.md` |
-| Foundry project setup | `references/solidity/setups/foundry.md` *(default)* |
-| Hardhat project setup | `references/solidity/setups/hardhat.md` |
+| Config, encrypted types, FHE gotchas for contracts | `references/overview.md` |
+| Confidential token (encrypted ERC-20, hidden balances) | `references/erc7984.md` |
+| Hand-written FHE ops, manual ACL, production decryption | `references/fhe-advanced.md` |
+| Foundry project setup | `references/setups/foundry.md` *(default)* |
+| Hardhat project setup | `references/setups/hardhat.md` |
 | Verified contract addresses | `references/addresses.md` — **never guess addresses** |
 
 ---
@@ -32,7 +32,7 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 - **Inherit `ZamaEthereumConfig` first.** It sets the FHEVM coprocessor addresses (`ACL`, `FHEVMExecutor`, `KMSVerifier`) per `block.chainid`. Without it, those addresses default to `address(0)` and every FHE op reverts the moment it tries to call them — with no revert reason, because the EVM is calling an empty account. Confusing to debug if you don't know to look for it.
 
-- **Use ERC-7984 for any confidential token.** Never reimplement encrypted balances, allowances, or transfers. `@openzeppelin/confidential-contracts` has the audited implementation. See `references/solidity/erc7984.md`.
+- **Use ERC-7984 for any confidential token.** Never reimplement encrypted balances, allowances, or transfers. `@openzeppelin/confidential-contracts` has the audited implementation. See `references/erc7984.md`.
 
 - **ACL after every state update.** `FHE.allowThis(handle)` for the contract, `FHE.allow(handle, user)` for decrypt access. ERC-7984 handles this internally; only hand-written FHE code needs it. For single-tx cross-contract handles, prefer `FHE.allowTransient` over persistent `FHE.allow`.
 

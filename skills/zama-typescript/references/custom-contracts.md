@@ -39,6 +39,6 @@ For non-React TypeScript integrations:
 
 ## Related
 
-- `sdk-permissions-and-sessions.md`
-- `react-sdk.md`
-- `sdk-token-flows.md`
+- `permissions.md`
+- `react.md`
+- `tokens.md`

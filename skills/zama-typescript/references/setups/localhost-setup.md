@@ -2,7 +2,7 @@
 
 **Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/local-development.md`
 
-For local Hardhat nodes and custom testnets deployed in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. Drop-in replacement for `RelayerWeb`/`RelayerNode`; the rest of your code is unchanged.
+For local nodes and custom testnets deployed in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. Drop-in replacement for `RelayerWeb`/`RelayerNode`; the rest of your code is unchanged.
 
 Blocked on Ethereum Mainnet and Sepolia — dev/test only.
 

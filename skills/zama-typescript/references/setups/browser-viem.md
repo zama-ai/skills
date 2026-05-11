@@ -44,4 +44,4 @@ await token.confidentialTransfer("0xRecipient", 500n);
 await token.unshield(500n);
 ```
 
-Vite needs COOP/COEP headers - see `../typescript.md` Universal SDK gotchas.
+Vite needs COOP/COEP headers - see `../overview.md` Universal SDK gotchas.
