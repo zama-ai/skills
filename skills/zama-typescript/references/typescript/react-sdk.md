@@ -22,7 +22,7 @@ If both `storage` and `sessionStorage` are persistent browser stores, keep them 
 - Custom FHE contract: start from `useEncrypt`, `useUserDecrypt`, `useIsAllowed`, and `useAllow`.
 - Delegated decrypt: use `useDelegateDecryption`, `useDelegationStatus`, `useDecryptBalanceAs`, or `useBatchDecryptBalancesAs`.
 - Wrapper registry or discovery: use the registry/discovery hooks instead of hardcoding wrapper addresses.
-- If unsure about exact hook names, inspect `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/reference/react/` or `node_modules/@zama-fhe/react-sdk/dist/index.d.ts`.
+- If unsure about exact hook names, check the **React reference** at `https://docs.zama.org/protocol/sdk` or inspect `node_modules/@zama-fhe/react-sdk/dist/esm/index.d.ts`.
 
 ## Decrypt UX
 

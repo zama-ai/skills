@@ -8,9 +8,11 @@ For protocol-level or architectural questions (Relayer/Gateway/KMS behavior), lo
 
 ## Canonical docs
 
-SDK docs currently live in the public repo under `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/`. Use those paths until the hosted SDK docs go live.
+The hosted SDK docs are now live at **https://docs.zama.org/protocol/sdk** — that's the authoritative reference. Source is at `https://github.com/zama-ai/sdk` (the wrapper SDK monorepo, currently `@zama-fhe/sdk@3.x`).
 
-When a detail is missing, inspect examples in `https://github.com/zama-ai/sdk/tree/main/examples/` or the generated typings in `node_modules/@zama-fhe/sdk/dist/`.
+When a detail is missing from the hosted docs, inspect:
+- Runnable examples — `https://github.com/zama-ai/sdk/tree/main/examples/`
+- Generated typings — `node_modules/@zama-fhe/sdk/dist/esm/index.d.ts` and `node_modules/@zama-fhe/react-sdk/dist/esm/index.d.ts`
 
 ## Choose one environment setup
 
@@ -73,7 +75,7 @@ transports: {
 
 - **Package landscape.** Install `@zama-fhe/sdk` explicitly. `@zama-fhe/react-sdk` requires it as a peer dependency and pnpm will not install peers automatically.
 - **Sepolia needs no relayer proxy.** `SepoliaConfig.relayerUrl` already points at the public Zama testnet relayer. Spread `SepoliaConfig` as-is and leave `relayerUrl` alone. Only override it on mainnet.
-- **Relayer API key (mainnet only).** Browser apps must proxy mainnet relayer requests through their own backend to keep the API key server-side. Node scripts pass `auth: { type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly.
+- **Relayer API key (mainnet only).** Browser apps must proxy mainnet relayer requests through their own backend to keep the API key server-side. Node scripts pass `auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly (note the **double-underscore** `__type` — that's the discriminator the relayer-sdk type expects).
 - **COOP/COEP headers required for browser.** `RelayerWeb` uses a Web Worker with WASM + `SharedArrayBuffer`. Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Vite: `server.headers`. Next.js: `async headers()` in config.
 - **Use the high-level token API for ERC-7984.** `sdk.createToken(addr)` returns a `Token` with `.shield`, `.balanceOf`, `.confidentialTransfer`, `.unshield`. Use `useEncrypt` / `useUserDecrypt` for custom FHE contracts such as auctions and voting.
 - **Encrypt -> ABI conversion.** `encrypt()` returns `handles: Uint8Array[]` and `inputProof: Uint8Array`. Wrap with viem `bytesToHex` or `ethers.hexlify` before passing to contract calls; ABIs expect `bytes32` or `bytes`.
@@ -82,14 +84,9 @@ transports: {
 
 ## Canonical doc paths
 
-All paths are under `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/`:
+Hosted at `https://docs.zama.org/protocol/sdk`:
 
-- `tutorials/quick-start.md` - end-to-end setup for supported stacks
-- `guides/configuration.md` - relayer, signer, storage, and network presets
-- `guides/authentication.md` - backend proxy pattern for API keys
-- `guides/node-js-backend.md` - worker pool and per-request isolation
-- `guides/web-extensions.md` - MV3 and `chromeSessionStorage`
-- `guides/local-development.md` - `RelayerCleartext` for Hardhat
-- `guides/encrypt-decrypt.md` - low-level FHE for custom contracts
-- `reference/sdk/` - core SDK classes, token API, relayers, and presets
-- `reference/react/` - React provider and hooks
+- **Tutorials** — Quick start · First confidential dApp · Wallet & exchange integration
+- **Guides** — Configuration · Authentication · Relayer API keys · Shield · Transfer privately · Unshield · Check balances · Handle errors · Activity feeds · Node.js backend · Web extensions · Local development · Next.js SSR · Operator approvals · Encrypt & decrypt
+- **API reference (SDK)** — `ZamaSDK`, `Token`, `ReadonlyToken`, `WrappersRegistry`, `RelayerWeb`, `RelayerNode`, `RelayerCleartext`, `ViemSigner`, `EthersSigner`, `WagmiSigner`, `GenericSigner`, `GenericStorage`, network presets, errors, contract builders, event decoders, delegated decryption
+- **API reference (React)** — `ZamaProvider` + the full hook surface (`useShield`, `useConfidentialBalance(s)`, `useConfidentialTransfer(From)`, `useUnshield(All)`, `useResumeUnshield`, `useUnwrap(All)`, `useFinalizeUnwrap`, `useAllow`, `useIsAllowed`, `useRevoke`, `useRevokeSession`, `useConfidentialApprove`, `useEncrypt`, `useUserDecrypt`, `usePublicDecrypt`, `useDelegateDecryption`, `useRevokeDelegation`, `useDelegationStatus`, `useDecryptBalanceAs`, `useBatchDecryptBalancesAs`, plus wrapper-registry / discovery hooks)

@@ -62,10 +62,11 @@ Be honest with developers. FHEVM is wrong for:
 ```
 User dApp / Browser
     ↓
-@zama-fhe/sdk          ← recommended SDK (high-level wrapper)
-    ↓                    repo: github.com/zama-ai/sdk · docs: docs.zama.org/protocol/sdk
-@fhevm/sdk             ← low-level Relayer SDK (replaces legacy @zama-fhe/relayer-sdk)
-    ↓ HTTPS              repo: github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
+@zama-fhe/sdk (+ @zama-fhe/react-sdk for React)    ← recommended user-facing SDK (3.x)
+    ↓                                                 docs: https://docs.zama.org/protocol/sdk
+@zama-fhe/relayer-sdk (0.4.x)                      ← public lower-level SDK; the wrapper
+    ↓                                                 above uses it internally today
+    ↓ HTTPS
 Relayer (public API — the ONLY entry point)
     ↓ transactions
 Gateway Contracts (shared L2)
@@ -75,7 +76,7 @@ Coprocessors (off-chain TFHE compute) + KMS (threshold decryption)
 Gateway Contracts → Relayer → SDK → User
 ```
 
-**Which SDK to import:** new code uses `@zama-fhe/sdk` (and `@zama-fhe/react-sdk` for React). Reach for `@fhevm/sdk` only when you need direct relayer access — it's the engine `@zama-fhe/sdk` wraps. Legacy `@zama-fhe/relayer-sdk` is being phased out in favour of `@fhevm/sdk`. See [design/fhevm-sdk.md](./design/fhevm-sdk.md) for the low-level SDK surface.
+**Which SDK to import:** new code uses `@zama-fhe/sdk` (and `@zama-fhe/react-sdk` for React). `@zama-fhe/relayer-sdk` is the lower-level public SDK that the wrapper uses internally — import directly only when you need raw relayer types or want to skip the high-level wrapper. A future replacement low-level SDK called `@fhevm/sdk` lives in the FHEVM monorepo at `github.com/zama-ai/fhevm/tree/main/sdk/js-sdk`, but it is currently `"private": true` and **not yet published to npm**. See [design/fhevm-sdk.md](./design/fhevm-sdk.md) for its internal design.
 
 **Host Chain Contracts** (deployed on Ethereum/Sepolia where your dApp lives):
 
@@ -347,7 +348,7 @@ There are no protocol fees at the moment. To use the Relayer on mainnet, develop
 
 ```typescript
 // Relayer SDK initialization
-auth: { type: 'ApiKeyHeader', value: process.env.ZAMA_FHEVM_API_KEY }
+auth: { __type: 'ApiKeyHeader', value: process.env.ZAMA_FHEVM_API_KEY }
 ```
 
 Sepolia testnet does not require an API key.
