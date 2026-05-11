@@ -28,7 +28,7 @@ const sdk = new ZamaSDK({
       [SepoliaConfig.chainId]: {
         ...SepoliaConfig,
         network: process.env.RPC_URL!,
-        auth: { type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY! },
+        auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY! },
       },
     },
   }),

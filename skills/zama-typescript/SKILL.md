@@ -11,11 +11,13 @@ Integrate the Zama FHE SDK into browser apps, React apps, Node.js backends, brow
 
 ## Which SDK?
 
-There are two TypeScript packages in this stack — pick deliberately:
+Current published landscape (verified against the `zama-ai/sdk` monorepo):
 
-- **`@zama-fhe/sdk`** — recommended high-level wrapper. Adds session management, token helpers, React hooks (`@zama-fhe/react-sdk`), better error messages. Most of this skill (signers, `ZamaSDK`, `RelayerWeb` / `RelayerNode`, storage backends, `SepoliaConfig`, hooks, token API) documents this package. Repo: github.com/zama-ai/sdk · docs: docs.zama.org/protocol/sdk.
-- **`@fhevm/sdk`** — the low-level Relayer SDK that `@zama-fhe/sdk` wraps internally. Standalone action functions, narrow client factories (`createFhevmClient` / `EncryptClient` / `DecryptClient` / `BaseClient`), tightest possible bundles. Use it directly when you need raw `encryptValues` / `decryptValues` / `readPublicValues`, custom runtime composition, or are writing a wrapper of your own. For the full surface, see the **zama-protocol** skill's `references/design/fhevm-sdk.md`.
-- **`@zama-fhe/relayer-sdk`** — legacy. Being phased out in favour of `@fhevm/sdk`. Migrate when convenient.
+- **`@zama-fhe/sdk`** (currently `3.x`) — **recommended** high-level user-facing SDK. `ZamaSDK`, `RelayerWeb` / `RelayerNode` / `RelayerCleartext`, signer adapters (`ViemSigner`, `EthersSigner`), storage backends (`IndexedDBStorage`, `MemoryStorage`, `ChromeSessionStorage`), network presets (`SepoliaConfig`, `MainnetConfig`, `HardhatConfig`), the Token / ReadonlyToken / WrappersRegistry API. Most of this skill documents this package. Repo: github.com/zama-ai/sdk · docs: **https://docs.zama.org/protocol/sdk**.
+- **`@zama-fhe/react-sdk`** — React hooks layered on `@zama-fhe/sdk`. Requires `@zama-fhe/sdk` as a peer.
+- **`@zama-fhe/relayer-sdk`** (currently `0.4.x`) — the public lower-level Relayer SDK that `@zama-fhe/sdk` uses **internally** today. Still maintained. Import directly if you need raw relayer types or want to skip the high-level wrapper, but for most apps the wrapper is the right surface.
+
+A future low-level SDK called `@fhevm/sdk` exists inside the FHEVM monorepo (`zama-ai/fhevm/sdk/js-sdk`) but is currently marked `"private": true` — **not yet on npm, not user-facing**. The zama-protocol skill's `references/design/fhevm-sdk.md` describes its internal design.
 
 ---
 
@@ -70,7 +72,9 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 ## Canonical sources
 
-- **`@zama-fhe/sdk` repo:** https://github.com/zama-ai/sdk
-- **`@zama-fhe/sdk` docs:** https://docs.zama.org/protocol/sdk
+- **`@zama-fhe/sdk` hosted docs (authoritative):** https://docs.zama.org/protocol/sdk
+- **`@zama-fhe/sdk` repo (source + examples + changelog):** https://github.com/zama-ai/sdk
 - **`@zama-fhe/sdk` examples:** https://github.com/zama-ai/sdk/tree/main/examples/
-- **`@fhevm/sdk` (low-level):** https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
+- **`@fhevm/sdk` (low-level Relayer SDK):** https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
+
+Current major: `@zama-fhe/sdk@3.x`. Check the repo's `CHANGELOG.md` before upgrading existing apps.
