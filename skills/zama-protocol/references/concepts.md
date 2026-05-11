@@ -26,7 +26,7 @@ Your job: help developers understand the protocol, plan their architecture, and 
 
 **You tried to branch on encrypted values.** `if (FHE.gt(a, b))` does not compile. `FHE.gt()` returns an `ebool` — an encrypted boolean the EVM cannot evaluate. Use `FHE.select()` — both branches always execute, which is what makes it private.
 
-**You forgot `FHE.allowThis()`.** Every encrypted value is born with an empty ACL. The contract itself doesn't have permission to use its own stored values on the next call unless you explicitly grant it. This compiles, deploys, and silently fails at runtime. The #1 Zama Protocol bug.
+**You forgot `FHE.allowThis()`.** Every encrypted value is born with an empty ACL. The contract itself doesn't have permission to use its own stored values on the next call unless you explicitly grant it. This compiles and deploys cleanly; the second transaction that reads the stored handle reverts with `ACLNotAllowed`. The #1 Zama Protocol bug because the failure is deferred — tests that only check first-call behaviour miss it.
 
 **You called decryption mid-computation.** Decryption is async — it goes through the Relayer → Gateway → KMS threshold MPC pipeline. It takes seconds, not milliseconds. Design contracts to compute entirely on encrypted values, then decrypt only the final result.
 
@@ -62,17 +62,10 @@ Be honest with developers. FHEVM is wrong for:
 ```
 User dApp / Browser
     ↓
-@zama-fhe/sdk  ← recommended high-level SDK (wraps the relayer SDK,
-    ↓            adds session management, hooks, better errors)
-                 repo: https://github.com/zama-ai/sdk
-                 docs: https://docs.zama.org/protocol/sdk
-
-@fhevm/sdk     ← low-level Relayer SDK (replaces the older
-    ↓            @zama-fhe/relayer-sdk).
-                 repo: https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
-                 Most dApps should never import this directly —
-                 use @zama-fhe/sdk above.
-    ↓ HTTPS
+@zama-fhe/sdk          ← recommended SDK (high-level wrapper)
+    ↓                    repo: github.com/zama-ai/sdk · docs: docs.zama.org/protocol/sdk
+@fhevm/sdk             ← low-level Relayer SDK (replaces legacy @zama-fhe/relayer-sdk)
+    ↓ HTTPS              repo: github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
 Relayer (public API — the ONLY entry point)
     ↓ transactions
 Gateway Contracts (shared L2)
@@ -82,11 +75,7 @@ Coprocessors (off-chain TFHE compute) + KMS (threshold decryption)
 Gateway Contracts → Relayer → SDK → User
 ```
 
-**Which SDK to import:**
-
-- New code: `@zama-fhe/sdk` (and `@zama-fhe/react-sdk` for React). This is the supported high-level surface.
-- `@fhevm/sdk` exists for advanced users who need direct relayer access. It is also what `@zama-fhe/sdk` is built on top of internally.
-- Legacy `@zama-fhe/relayer-sdk` is being phased out in favour of `@fhevm/sdk`. Migrate when convenient.
+**Which SDK to import:** new code uses `@zama-fhe/sdk` (and `@zama-fhe/react-sdk` for React). Reach for `@fhevm/sdk` only when you need direct relayer access — it's the engine `@zama-fhe/sdk` wraps. Legacy `@zama-fhe/relayer-sdk` is being phased out in favour of `@fhevm/sdk`. See [design/fhevm-sdk.md](./design/fhevm-sdk.md) for the low-level SDK surface.
 
 **Host Chain Contracts** (deployed on Ethereum/Sepolia where your dApp lives):
 
@@ -152,7 +141,7 @@ When your contract calls `FHE.add(a, b)`:
 2. Checks ACL — caller has permission for both operands
 3. Charges HCU cost for the operation
 4. Generates a deterministic output handle
-5. Emits an `FheAdd` event with `(lhs, rhs, result, scalarByte)`
+5. Emits an `FheAdd(caller, lhs, rhs, scalarByte, result)` event
 6. Returns the handle immediately (no waiting for computation)
 
 **Later, off-chain:**
@@ -177,10 +166,10 @@ Every encrypted value is born with an **empty access list**. Nobody can use it u
 |------|--------|----------|----------|
 | **Persistent** | `FHE.allow(handle, account)` / `FHE.allowThis(handle)` | Permanent (onchain storage) | Balances, stored state |
 | **Transient** | `FHE.allowTransient(handle, account)` | Current transaction only (EIP-1153) | Intermediate values, cross-contract calls |
-| **Decryption** | `FHE.makePubliclyDecryptable(handle)` | Permanent | Auction results, vote tallies |
-| **Delegation** | `FHE.delegateForUserDecryption(delegate, contract, expiry)` | Until expiration block | Third-party reads on behalf of user |
+| **Decryption** | `FHE.makePubliclyDecryptable(handle)` (ACL method: `allowForDecryption`) | Permanent | Auction results, vote tallies |
+| **Delegation** | `FHE.delegateUserDecryption(delegate, contract, expirationDate)` (plus `delegateUserDecryptions`, `…WithoutExpiration`, and `revokeUserDecryptionDelegation`) | Until expiration timestamp | Third-party reads on behalf of user |
 
-**Auto-grants:** FHEVMExecutor automatically grants access to `msg.sender` and `tx.origin` when an operation produces a new handle. But this does NOT persist across transactions — you must call `FHE.allowThis()` for the contract to use stored values in future calls.
+**Auto-grants:** FHEVMExecutor grants **transient** access (via `ACL.allowTransient`) to `msg.sender` **only** — never `tx.origin`, never persistent. The handle is usable for the rest of the current transaction; for any use in a later transaction the contract must call `FHE.allowThis(handle)` to upgrade the grant to persistent. This is the #1 source of "compiles, deploys, then reverts on the next call with `ACLNotAllowed`" bugs.
 
 ### The Essential Pattern
 
@@ -192,13 +181,14 @@ FHE.allowThis(balances[user]);     // Contract can use it next call
 FHE.allow(balances[user], user);   // User can decrypt it
 ```
 
-Miss `FHE.allowThis()` and the contract silently fails on the next transaction that reads this value. No revert, no error — just broken.
+Miss `FHE.allowThis()` and the contract still deploys, but the next transaction that reads this value reverts with `ACLNotAllowed(handle, address(this))`. The failure is **deferred**, not silent — easy to miss in tests that only exercise first-call behaviour, loud once it ships.
 
 ### Delegation Rules
 
-- Delegation has a **block-based expiration** — set via `expirationDate` parameter
-- **No same-block changes** — ACL delegation changes cannot take effect in the same block they're made (prevents manipulation)
-- Revoke with `FHE.revokeDelegationForUserDecryption(delegate, contract)`
+- Delegation expiration is a **unix timestamp** (`uint64`), not a block number. Delegation lapses when `block.timestamp > expirationDate`.
+- **No same-block delegate/revoke** — `delegate*` and `revoke*` both reject if `lastBlockDelegateOrRevoke == block.number`. This blocks two delegation-state changes in the same block; it does NOT prevent a decryption from happening in the same block as a delegation.
+- Revoke with `FHE.revokeUserDecryptionDelegation(delegate, contract)` (single) or `FHE.revokeUserDecryptionDelegations(delegate, contracts[])` (batched).
+- Wildcard: passing `ACL.WILDCARD_DELEGATION_ADDRESS` (`type(uint160).max`) as `contractAddress` grants the delegation for every contract at once. The delegator still needs persistent access on the handle.
 
 > **Design reference:** [design/acl.md](./design/acl.md)
 
@@ -206,138 +196,33 @@ Miss `FHE.allowThis()` and the contract silently fails on the next transaction t
 
 ## The Relayer — Your Integration Point
 
-The Relayer is the **only public entry point** to the Zama Protocol. Your frontend/backend talks to the Relayer. Never send transactions to the Gateway directly.
+The Relayer is the **only public entry point** to the Zama Protocol. Your frontend/backend talks to the Relayer (or, more typically, to `@zama-fhe/sdk` which talks to the Relayer for you). Never send transactions to the Gateway directly.
 
-### Endpoints
+Five endpoints under `/v2/`:
 
-| Endpoint | Method | What it does |
-|----------|--------|-------------|
-| `/v2/input-proof` | POST | Submit user-encrypted input for ZKPoK verification |
-| `/v2/public-decrypt` | POST/GET | Request public decryption (anyone can read result) |
-| `/v2/user-decrypt` | POST/GET | Request user decryption (only authorized user reads) |
-| `/v2/delegated-user-decrypt` | POST/GET | Delegated decryption (third party reads for user) |
-| `/v2/keyurl` | GET | Fetch FHE public key + CRS URLs |
+| Endpoint | What it does |
+|----------|--------------|
+| `POST /v2/input-proof` | Submit user-encrypted input for ZKPoK verification |
+| `POST /v2/public-decrypt` | Request public decryption (anyone can read the result) |
+| `POST /v2/user-decrypt` | Request user decryption (only the authorized user reads) |
+| `POST /v2/delegated-user-decrypt` | Delegated user decryption (third party reads for user) |
+| `GET  /v2/keyurl` | Fetch active FHE public key + CRS URLs |
 
-### Request-Response Pattern
+POSTs return `202 Accepted` with a `requestId`. Poll the matching `GET /v2/{operation}/{requestId}` until status is `"succeeded"` (terminal success) or `"failed"`. Status `"queued"` while pending; HTTP 400 on validation errors; 429 when the queue is full.
 
-All POST endpoints return **202 Accepted** with a `requestId`:
-
-```json
-{
-  "status": "queued",
-  "requestId": "abc123...",
-  "Retry-After": 5
-}
-```
-
-Poll with GET using the `requestId` until status is `"completed"` or `"failed"`.
-
-### Status Codes
-
-| Code | Meaning |
-|------|---------|
-| 202 | Queued — poll with GET |
-| 200 | Completed (or failed with error details) |
-| 400 | Validation error (bad input) |
-| 429 | Queue full — retry later |
-
-### Input Proof Submission
-
-```json
-POST /v2/input-proof
-{
-  "contractChainId": "<uint256>",
-  "contractAddress": "0x...",
-  "userAddress": "0x...",
-  "ciphertextWithInputVerification": "<hex>",
-  "extraData": "00"
-}
-```
-
-Returns verified `handles[]` and `signatures[]` once coprocessor threshold is reached.
-
-### Public Decryption
-
-```json
-POST /v2/public-decrypt
-{
-  "handles": ["0x...", "..."],
-  "contractChainId": "<uint256>",
-  "extraData": "00"
-}
-```
-
-**Prerequisite:** Contract must have called `FHE.makePubliclyDecryptable(handle)` first.
-
-Returns `{ plaintext: "<abi-encoded>", signatures[] }` after KMS threshold decryption.
-
-### User Decryption
-
-```json
-POST /v2/user-decrypt
-{
-  "handleContractPairs": [{ "handle": "0x...", "contractAddress": "0x..." }],
-  "requestValidity": { "startTimestamp": <uint>, "durationDays": <uint> },
-  "contractsChainId": "<uint256>",
-  "contractAddresses": ["0x..."],
-  "userAddress": "0x...",
-  "signature": "<EIP-712 signature>",
-  "publicKey": "<ML-KEM-512 public key>",
-  "extraData": "00"
-}
-```
-
-**Prerequisite:** `FHE.allow(handle, userAddress)` must have been called in the contract.
-
-Returns signcrypted shares — the frontend decrypts with the ML-KEM private key and reconstructs plaintext via Lagrange interpolation.
-
-> **Design reference:** [design/relayer.md](./design/relayer.md)
+Each operation has its own request/response shape and pre-validation rules (host-ACL checks, bit-size limits, etc.). See [design/relayer.md](./design/relayer.md) for the full payload specs and the validation pipeline.
 
 ---
 
 ## Decryption Flows
 
-### Public Decryption (Anyone Can Read)
+Two shapes, with the same Relayer → Gateway → KMS → Relayer pipeline. The difference is what comes back.
 
-Use for: auction results, vote tallies, game outcomes — values that should become public.
+**Public** (`FHE.makePubliclyDecryptable(handle)` first) — plaintext returned to anyone. Gateway threshold: `publicDecryptionThreshold = t + 1` (each honest node returns the same plaintext). For auction results, vote tallies, game outcomes.
 
-```
-1. Contract: FHE.makePubliclyDecryptable(handle)
-2. Frontend: POST /v2/public-decrypt → Relayer
-3. Relayer: validates ACL, submits to Gateway Decryption contract
-4. Gateway: emits event → KMS nodes perform threshold decryption
-5. KMS: t+1 nodes return identical plaintext, sign EIP-712 proof
-6. Gateway: collects signatures, emits response when threshold reached
-7. Relayer: stores result
-8. Frontend: GET /v2/public-decrypt/{job_id} → receives plaintext
-```
+**User** (`FHE.allow(handle, userAddress)` first) — plaintext is never on chain. Each KMS node signs a partial share, signcrypts it under the user's transport public key, and submits it; the gateway emits `UserDecryptionResponseThresholdReached` once `userDecryptionThreshold = 2t + 1` valid responses are stored, and the user reconstructs the plaintext client-side from `t + 1` of those shares via Lagrange interpolation. For private balances, personal data.
 
-**Threshold:** `publicDecryptionThreshold` = `t + 1` (all honest nodes return identical results).
-
-### User Decryption (Only Authorized User)
-
-Use for: private balances, personal data — values only the owner should see.
-
-```
-1. Contract: FHE.allow(handle, userAddress)
-2. Frontend: generates ML-KEM-512 keypair
-3. Frontend: signs EIP-712 UserDecryptRequestVerification
-4. Frontend: POST /v2/user-decrypt → Relayer
-5. Relayer: validates ACL (handle allowed for user AND contract)
-6. Gateway: emits event → KMS nodes compute partial shares
-7. KMS: each node signcrypts its share under user's ML-KEM public key
-8. Gateway: collects 2*t+1 shares, emits response
-9. Frontend: ML-KEM.Decapsulate each share, verify KMS signatures
-10. Frontend: Lagrange interpolation → reconstructed plaintext
-```
-
-**Threshold:** `userDecryptionThreshold` = `2*t + 1` (each node returns a different Lagrange share).
-
-**Key difference:** Public decryption returns plaintext directly. User decryption returns encrypted shares that only the authorized user can reconstruct client-side.
-
-### Delegated User Decryption
-
-Same as user decryption, but a **delegate** decrypts on behalf of the user. The delegator must have called `FHE.delegateForUserDecryption(delegate, contract, expirationDate)` beforehand.
+**Delegated user** — same as user decryption, but submitted by a delegate. The delegator must have called `FHE.delegateUserDecryption(delegate, contract, expirationDate)` (timestamp-based) beforehand, or one of its batched / `WithoutExpiration` variants.
 
 > **Design reference:** [design/flow-public-decryption.md](./design/flow-public-decryption.md), [design/flow-user-decryption.md](./design/flow-user-decryption.md)
 
@@ -370,13 +255,15 @@ When users encrypt values client-side (using `@zama-fhe/sdk`), they must prove t
 
 ### Limits
 
-| Limit | Value | Effect |
-|-------|-------|--------|
-| Per-tx total (`maxHCUPerTx`) | 20,000,000 | Transaction reverts if exceeded |
-| Per-tx depth (`maxHCUDepthPerTx`) | 5,000,000 | Sequential depth limit |
-| Per-block global (`globalHCUCapPerBlock`) | 5,000,000 | Cap for non-whitelisted accounts |
+| Limit | Field | Current mainnet/Sepolia value | Effect |
+|-------|-------|------------------------------:|--------|
+| Per-tx total | `maxHCUPerTx` | `20_000_000` | Transaction reverts if exceeded |
+| Per-tx depth | `maxHCUDepthPerTx` | `5_000_000` | Longest sequential dependency chain |
+| Per-block global | `hcuPerBlock` | `281_474_976_710_655` (`uint48.max`) | Caps non-whitelisted accounts per block — currently set so high the per-tx caps are the binding constraint |
 
-For per-operation HCU costs, load the **zama-solidity** skill and see `references/solidity/solidity.md` (HCU section).
+Invariant: `hcuPerBlock ≥ maxHCUPerTx ≥ maxHCUDepthPerTx`.
+
+Per-operation HCU cost tables live in the public FHEVM docs (see the "HCU cost tables" link in `SKILL.md`'s Canonical sources). The values shift between releases — don't hardcode.
 
 **Optimization rules:**
 - Use **scalar operations** when one operand is plaintext (always cheaper)
@@ -444,9 +331,7 @@ Setup instructions live in the domain skills. Load the one matching your stack:
 |---------|---------|
 | `@fhevm/solidity` | Solidity library — FHE.sol, encrypted types, configs |
 | `@fhevm/hardhat-plugin` | Hardhat plugin — local FHE mock for testing |
-| `@zama-fhe/sdk` | **Recommended** high-level SDK — encrypt/decrypt client-side, session management, better DX. Repo: [zama-ai/sdk](https://github.com/zama-ai/sdk). Docs: [docs.zama.org/protocol/sdk](https://docs.zama.org/protocol/sdk) |
-| `@zama-fhe/react-sdk` | React hooks layered on `@zama-fhe/sdk` |
-| `@fhevm/sdk` | Low-level Relayer SDK ([fhevm/sdk/js-sdk](https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk)). Replaces the older `@zama-fhe/relayer-sdk`. `@zama-fhe/sdk` wraps this — prefer the wrapper unless you specifically need raw Relayer calls. |
+| `@zama-fhe/sdk` · `@zama-fhe/react-sdk` | Client SDK — encrypt/decrypt, session management, React hooks. The recommended frontend dependency. (See the layer-stack section above for the wrapper-vs-`@fhevm/sdk` relationship.) |
 | `@openzeppelin/confidential-contracts` | Production patterns — ERC-7984, confidential tokens |
 
 ---
@@ -462,7 +347,7 @@ There are no protocol fees at the moment. To use the Relayer on mainnet, develop
 
 ```typescript
 // Relayer SDK initialization
-auth: { __type: 'ApiKeyHeader', value: process.env.ZAMA_FHEVM_API_KEY }
+auth: { type: 'ApiKeyHeader', value: process.env.ZAMA_FHEVM_API_KEY }
 ```
 
 Sepolia testnet does not require an API key.
@@ -500,6 +385,7 @@ Deeper protocol design notes are bundled with this skill under `references/desig
 | ACL system & where it's enforced | [design/acl.md](./design/acl.md) |
 | Coprocessor architecture | [design/coprocessor.md](./design/coprocessor.md) |
 | Relayer API | [design/relayer.md](./design/relayer.md) |
+| `@fhevm/sdk` (low-level Relayer SDK) | [design/fhevm-sdk.md](./design/fhevm-sdk.md) |
 | HCU gas model | [design/hcu-limits.md](./design/hcu-limits.md) |
 | KMS overview | [design/kms-overview.md](./design/kms-overview.md) |
 | KMS threshold MPC | [design/kms-threshold-mpc.md](./design/kms-threshold-mpc.md) |

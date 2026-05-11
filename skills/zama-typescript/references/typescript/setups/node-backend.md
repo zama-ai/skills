@@ -28,7 +28,7 @@ const sdk = new ZamaSDK({
       [SepoliaConfig.chainId]: {
         ...SepoliaConfig,
         network: process.env.RPC_URL!,
-        auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY! },
+        auth: { type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY! },
       },
     },
   }),
@@ -36,12 +36,8 @@ const sdk = new ZamaSDK({
   storage: memoryStorage,
 });
 
-try {
-  const token = sdk.createToken("0xToken");
-  await token.confidentialTransfer("0xRecipient", 500n);
-} finally {
-  sdk.terminate(); // stops worker threads
-}
+const token = sdk.createToken("0xToken");
+await token.confidentialTransfer("0xRecipient", 500n);
 ```
 
 ## Server with concurrent requests

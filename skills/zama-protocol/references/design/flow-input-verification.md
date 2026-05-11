@@ -6,7 +6,7 @@ When a user submits an encrypted value to a contract, they prove (in zero-knowle
 
 ```text
 User (browser / SDK)
-  1. GET /v2/keyurl → FHE public key + CRS
+  1. GET /v2/keyurl → FHE public key + CRS URLs
   2. encrypt plaintext under FHE public key
   3. generate ZKPoK using CRS
   4. ciphertextWithInputVerification = abi(ciphertext, zkproof)
@@ -32,32 +32,35 @@ Gateway InputVerification
 Each coprocessor (independently, via gw-listener)
   - load CRS from public keychain
   - verify ZKPoK (proof valid, prover knows plaintext)
-  - compute handle, store ciphertext in S3
-  - ECDSA-sign CiphertextVerification with its signerAddress
-  - call verifyProofResponse(zkProofId, handles[], coprocessorSignature)
-    or rejectProofResponse(zkProofId, ...) on failure
+  - compute one or more handles (one per encrypted value in the batch)
+  - store ciphertexts in S3
+  - ECDSA-sign the CiphertextVerification struct with its signerAddress
+  - call verifyProofResponse(zkProofId, ctHandles[], signature, extraData)
+    OR rejectProofResponse(zkProofId, extraData) on failure
         │
         ▼
 Gateway InputVerification consensus
-  - dedup by (requestId, coprocessor) — alreadyResponded map
-  - bucket responses by hash(zkProofId, handles[])
+  - dedup by (zkProofId, coprocessor) — alreadyResponded map
+  - bucket responses by hash(zkProofId, ctHandles[])
   - at coprocessorThreshold matching responses:
-      emit VerifyProofResponse { zkProofId, accepted: true, handles[], signatures[] }
+      emit VerifyProofResponse(zkProofId, ctHandles[], signatures[])
   - at coprocessorThreshold rejections:
-      emit VerifyProofResponse { zkProofId, accepted: false }
+      emit RejectProofResponse(zkProofId)
         │
         ▼
 Relayer (blockchain listener)
   stores result, marks job Completed
 
 User polls GET /v2/input-proof/{job_id}
-  → { accepted, handles[], signatures[] }
+  → { accepted, handles[], signatures[] }   // accepted derived from event type
 
 dApp (host chain)
-  FHEVMExecutor.verifyInput(inputHandle, inputProof)
-    → InputVerifier.verifyInputsEIP712KMSSignatures(...)
+  FHEVMExecutor.verifyInput(inputHandle, userAddress, inputProof, inputType)
+    → InputVerifier.verifyInput(context, inputHandle, inputProof)
     → returns verified handle, usable in FHE ops
 ```
+
+`inputProof` carries the coprocessor signatures collected from the gateway response. The dApp doesn't pass `handles[]` to the host chain — it picks the specific handle it wants verified and proves it's in the signed set.
 
 ## Gateway: `InputVerification`
 
@@ -71,11 +74,27 @@ event VerifyProofRequest(
     bytes   extraData
 );
 
-function verifyProofResponse(uint256 requestId, bytes32[] handles, bytes coprocessorSignature) external;
-function rejectProofResponse(uint256 requestId, bytes coprocessorSignature) external;
+// emitted on success — no `accepted` field
+event VerifyProofResponse(
+    uint256 indexed zkProofId,
+    bytes32[] ctHandles,
+    bytes[] signatures
+);
+
+// emitted on rejection — separate event, not a flag
+event RejectProofResponse(uint256 indexed zkProofId);
+
+function verifyProofResponse(
+    uint256 zkProofId,
+    bytes32[] calldata ctHandles,
+    bytes calldata signature,
+    bytes calldata extraData
+) external;
+
+function rejectProofResponse(uint256 zkProofId, bytes calldata extraData) external;
 ```
 
-Consensus is established when `coprocessorThreshold` distinct coprocessors submit responses that hash to the same `(requestId, handles[])`. Duplicate submissions from a single coprocessor are rejected.
+Consensus is established when `coprocessorThreshold` distinct coprocessors submit responses that hash to the same `(zkProofId, ctHandles[])`. Duplicate submissions from a single coprocessor are rejected.
 
 ## Host chain: `InputVerifier`
 
@@ -86,27 +105,30 @@ struct InputVerifierStorage {
     uint256 threshold;
 }
 
-function verifyInputsEIP712KMSSignatures(
-    address userAddress,
-    address contractAddress,
+function verifyInput(
+    FHEVMExecutor.ContextUserInputs calldata context,
+    bytes32 inputHandle,
     bytes memory inputProof
-) external returns (bytes32[] memory handles);
+) external returns (bytes32 verifiedHandle);
 ```
 
-Steps:
-1. Decode embedded coprocessor signatures from `inputProof`.
-2. Reconstruct the `CiphertextVerification` EIP-712 struct (userAddress, contractAddress, handles, chain context).
-3. `ecrecover` each signature; require signer ∈ `isSigner`; require unique-signer count ≥ `threshold`.
-4. Return the verified handles.
+`verifyInput` takes a single handle (not an array) plus a `ContextUserInputs` struct that carries `userAddress`, `contractAddress`, and the expected `FheType`. It:
 
-Note: `InputVerifier` uses `EIP712UpgradeableCrossChain` — signatures created against the gateway's domain separator validate on any host chain.
+1. Decodes the embedded coprocessor signatures and the candidate handles list from `inputProof`.
+2. Asserts `inputHandle` is one of the handles in the signed list.
+3. Reconstructs the `CiphertextVerification` EIP-712 struct from `context` + handles.
+4. `ecrecover`s each signature; requires signer ∈ `isSigner`; requires unique-signer count ≥ `threshold`.
+5. Returns the verified handle.
+
+`InputVerifier` uses `EIP712UpgradeableCrossChain` — signatures created against the gateway's domain separator validate on any host chain.
 
 ## Failure modes
 
 | Scenario | Result |
 |----------|--------|
-| Invalid ZKPoK | Coprocessors call `rejectProofResponse`; threshold of rejections → `VerifyProofResponse(accepted=false)` |
-| Insufficient valid signatures on host | `InputVerifier` reverts |
+| Invalid ZKPoK | Coprocessors call `rejectProofResponse`; threshold of rejections → `RejectProofResponse` event |
+| Insufficient valid signatures on host | `InputVerifier.verifyInput` reverts |
+| `inputHandle` not in the signed handles list | `InputVerifier.verifyInput` reverts |
 | Unregistered signer | Signature ignored, not counted |
 | Same coprocessor submits twice | Revert (`alreadyResponded`) |
 | Stale request | Implementation-defined timeout |

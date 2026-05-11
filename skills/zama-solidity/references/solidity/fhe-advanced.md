@@ -63,8 +63,10 @@ FHE.revokeUserDecryptionDelegations(delegate, cs);
 euint64 v = FHE.fromExternal(externalValue, inputProof);
 FHE.allowThis(v);
 
-// On-chain randomness (upper bound must be a power of 2)
-euint8 die = FHE.randEuint8(FHE.asEuint8(8));
+// On-chain randomness — upper bound is plaintext and must be a power of 2.
+// Two forms per type: bounded and unbounded.
+euint8 die  = FHE.randEuint8(8);     // bounded to [0, 8)
+euint8 byteRand = FHE.randEuint8();  // full euint8 range
 
 // Casting
 euint64 big = FHE.asEuint64(small32);

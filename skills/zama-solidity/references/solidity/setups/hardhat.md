@@ -1,114 +1,52 @@
-# Hardhat setup for fhEVM
+# Hardhat setup for FHEVM
 
-fhEVM currently supports **Hardhat V2 only** (`@nomicfoundation/hardhat-chai-matchers` latest is Hardhat 3 — must use the `@hh2` tag).
+Start from the template — it pins a coherent Hardhat + plugin + chai-matchers + ethers stack.
 
-## Install
+> **Template:** https://github.com/zama-ai/fhevm-hardhat-template
 
 ```bash
-npm init -y
-npm install --save-dev hardhat@^2.28.4 @fhevm/hardhat-plugin @fhevm/mock-utils \
-  @nomicfoundation/hardhat-chai-matchers@hh2 @nomicfoundation/hardhat-ethers@^3.0.0 \
-  @typechain/hardhat @typechain/ethers-v6 typechain \
-  typescript ts-node @types/node @types/mocha @types/chai chai@^4 ethers@^6
-npm install @fhevm/solidity encrypted-types @openzeppelin/confidential-contracts @openzeppelin/contracts
+git clone https://github.com/zama-ai/fhevm-hardhat-template my-project
+cd my-project && npm install
 ```
 
-Pinning notes:
-- `@nomicfoundation/hardhat-chai-matchers@hh2` — the plain `latest` tag installs a Hardhat-3-only build that errors at compile time.
-- `chai@^4` — Hardhat 2 / chai-matchers do not work with chai 5 (ESM).
-- `ethers@^6` + `@nomicfoundation/hardhat-ethers@^3` — must match.
+What follows is only the FHEVM-specific stuff you need to know that doesn't come from the template.
 
-## hardhat.config.ts
+## Why rolling your own is risky
+
+FHEVM currently supports **Hardhat V2 only**. Several packages in the Hardhat ecosystem ship Hardhat-3 builds on their `latest` tag, which silently breaks Hardhat-2 projects at install or compile time. The template pins:
+
+- Hardhat at a v2 major
+- `@nomicfoundation/hardhat-chai-matchers` at the `@hh2` variant (latest is Hardhat-3-only)
+- `chai` at v4 (chai 5 is ESM-only, incompatible with the matchers)
+- `ethers` v6 and `@nomicfoundation/hardhat-ethers` v3 (must match)
+
+If you assemble the toolchain yourself, reproduce that pin strategy. Specific version numbers are intentionally not listed here — take them from the template.
+
+## FHEVM-specific packages
+
+`@fhevm/solidity`, `@fhevm/hardhat-plugin`, `@fhevm/mock-utils`, `@openzeppelin/confidential-contracts`, `encrypted-types`. These identifiers don't move across Hardhat versions.
+
+## Config essentials
 
 ```typescript
-import "@fhevm/hardhat-plugin";
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/hardhat-ethers";
-import "@typechain/hardhat";
-import type { HardhatUserConfig } from "hardhat/config";
-
-const config: HardhatUserConfig = {
-  solidity: {
-    version: "0.8.27",
-    settings: {
-      optimizer: { enabled: true, runs: 800 },
-      evmVersion: "cancun",
-    },
-  },
-};
-export default config;
+import "@fhevm/hardhat-plugin"; // registers the `fhevm` runtime on `hre`
 ```
 
-Hardhat does NOT need `viaIR: true` — it handles stack depth on its own.
+`tsconfig.json` must set `rootDir: "."` — otherwise `tsc` infers `./test` and errors with TS5011 once `typechain-types/` is generated.
 
-## tsconfig.json
+Don't enable `viaIR` preemptively; turn it on only if `solc` reports "stack too deep."
 
-```json
-{
-  "compilerOptions": {
-    "target": "es2020",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "outDir": "dist",
-    "rootDir": "."
-  },
-  "include": ["./hardhat.config.ts", "./test/**/*", "./scripts/**/*", "./typechain-types/**/*"]
-}
-```
+## Tests
 
-`rootDir: "."` is required — without it `tsc` infers `./test` and errors with TS5011 once typechain-types is generated.
+Pattern: `fhevm.createEncryptedInput(contract, user).addXX(value).encrypt()` → call contract → `fhevm.userDecryptEuint(FhevmType.euintXX, handle, contract, signer)`. Gate mock-only behaviour with `if (!fhevm.isMock) this.skip()`.
 
-## Test pattern
+| Helper | Use |
+|--------|-----|
+| `fhevm.createEncryptedInput(contract, user).addXX(v).encrypt()` | `{ handles, inputProof }` — same shape as production SDK |
+| `fhevm.userDecryptEuint(FhevmType.euintXX, handle, contract, signer)` | `bigint` — full ACL + EIP-712 simulation |
+| `fhevm.isMock` | Gate mock-only assertions |
 
-```typescript
-import { expect } from "chai";
-import { ethers, fhevm } from "hardhat";
-import { FhevmType } from "@fhevm/hardhat-plugin";
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import type { MyConfidentialToken } from "../typechain-types";
+## Recurring gotchas
 
-describe("MyConfidentialToken", function () {
-  let token: MyConfidentialToken;
-  let tokenAddress: string;
-  let owner: SignerWithAddress, alice: SignerWithAddress;
-
-  beforeEach(async function () {
-    if (!fhevm.isMock) this.skip(); // tests only run on mock fhevm
-
-    [owner, alice] = await ethers.getSigners();
-    const Factory = await ethers.getContractFactory("MyConfidentialToken");
-    token = (await Factory.deploy(owner.address, "Token", "TKN", "https://x")) as unknown as MyConfidentialToken;
-    tokenAddress = await token.getAddress();
-  });
-
-  it("mints encrypted balance", async function () {
-    const enc = await fhevm
-      .createEncryptedInput(tokenAddress, owner.address)
-      .add64(1000)
-      .encrypt();
-
-    await token.mint(alice.address, enc.handles[0], enc.inputProof);
-
-    const handle = await token.confidentialBalanceOf(alice.address);
-    const clear = await fhevm.userDecryptEuint(FhevmType.euint64, handle, tokenAddress, alice);
-    expect(clear).to.equal(1000n);
-  });
-});
-```
-
-Plugin helpers:
-- `fhevm.createEncryptedInput(contract, user).addXX(value).encrypt()` → `{ handles, inputProof }`
-- `fhevm.userDecryptEuint(FhevmType.euintXX, handle, contract, signer)` → bigint
-- `fhevm.isMock` — gate tests on mock-only behavior
-
-## Gotchas specific to Hardhat
-
-- **Overloaded ERC-7984 functions**: use the explicit signature to avoid "ambiguous function description":
-  ```typescript
-  token["confidentialTransfer(address,bytes32,bytes)"](to, handle, proof);
-  ```
-- **Compile errors after dep upgrades**: nuke `cache/`, `artifacts/`, `typechain-types/` and recompile.
+- **Overloaded ERC-7984 functions**: ethers can't disambiguate. Use the explicit signature: `token["confidentialTransfer(address,bytes32,bytes)"](to, handle, proof)`.
+- **Stale build cache after upgrades**: nuke `cache/`, `artifacts/`, `typechain-types/` and recompile.

@@ -15,8 +15,8 @@ struct ACLStorage {
 }
 
 struct UserDecryptionDelegation {
-    uint64 expirationDate;            // unix timestamp
-    uint64 lastBlockDelegateOrRevoke; // prevents same-block changes
+    uint64 expirationDate;            // unix timestamp; 0 means no delegation
+    uint64 lastBlockDelegateOrRevoke; // prevents two delegate/revoke changes in the same block
     uint64 delegationCounter;         // monotonic, tracks delegate/revoke ordering
 }
 ```
@@ -34,7 +34,9 @@ function allow(bytes32 handle, address account) external;
 function persistAllowed(bytes32 handle, address account) external view returns (bool);
 ```
 
-Caller requirements: not on the deny list, and already has persistent access to `handle`. Emits `Allowed(handle, account)`.
+Caller requirements: not on the deny list, and already has persistent access to `handle`. Emits `Allowed(caller, account, handle)`.
+
+In application code via `@fhevm/solidity`: `FHE.allow(handle, account)` and the self-grant shortcut `FHE.allowThis(handle)`.
 
 ### 2. Transient — `allowTransient(handle, account)`
 
@@ -45,18 +47,20 @@ function allowTransient(bytes32 handle, address account) external;
 function isAllowedTransient(bytes32 handle, address account) external view returns (bool);
 ```
 
-Caller must already have persistent access to `handle`. Use for cross-contract callbacks that don't warrant persistent state.
+Caller must already have persistent access to `handle`. Used by `FHEVMExecutor` itself (see auto-grants below) and by cross-contract callbacks that don't warrant persistent state.
 
 ### 3. Public decryption — `allowForDecryption(handles[])`
 
 Marks handles as eligible for `Decryption.publicDecryptionRequest`.
 
 ```solidity
-function allowForDecryption(bytes32[] calldata handles) external;
+function allowForDecryption(bytes32[] memory handlesList) external;
 function isAllowedForDecryption(bytes32 handle) external view returns (bool);
 ```
 
-Emits `AllowedForDecryption(handle)`.
+Emits `AllowedForDecryption(caller, handlesList)` — the event covers the whole batch in one record.
+
+In application code via `@fhevm/solidity`: `FHE.makePubliclyDecryptable(handle)` (single handle). The library name and the ACL contract method name differ — the library is the recommended call site.
 
 ### 4. Combined check — `isAllowed`
 
@@ -77,32 +81,75 @@ A denied account cannot call any `allow*`, and `isAllowed` reverts in `FHEVMExec
 
 ## User-decryption delegation
 
-Lets a delegate decrypt on behalf of the delegator, scoped to a contract.
+Lets a delegate decrypt on behalf of the delegator, scoped to one or more contracts. The library exposes both single and batched variants and an "until revoked" variant.
 
 ```solidity
-function delegateForUserDecryption(
-    address delegate,
-    address contractAddress,
-    uint256 expirationDate
-) external;
+// @fhevm/solidity (FHE.sol) — what app code calls
+function delegateUserDecryption(address delegate, address contractAddress, uint64 expirationDate) internal;
+function delegateUserDecryptionWithoutExpiration(address delegate, address contractAddress) internal;
+function delegateUserDecryptions(address delegate, address[] memory contractAddresses, uint64 expirationDate) internal;
+function delegateUserDecryptionsWithoutExpiration(address delegate, address[] memory contractAddresses) internal;
+function revokeUserDecryptionDelegation(address delegate, address contractAddress) internal;
+function revokeUserDecryptionDelegations(address delegate, address[] memory contractAddresses) internal;
+```
 
-function revokeDelegationForUserDecryption(
-    address delegate,
-    address contractAddress
-) external;
+These wrap the underlying ACL contract methods `delegateForUserDecryption` / `revokeDelegationForUserDecryption`. **Use the library names in dApp code** — the contract names are renamed in the wrapper.
 
-function isDelegatedForUserDecryption(
+`expirationDate` is a **unix timestamp (`uint64`)**, not a block number. Delegation expires when `block.timestamp > expirationDate`.
+
+### Wildcard delegation (all contracts at once)
+
+`ACL.WILDCARD_DELEGATION_ADDRESS = address(type(uint160).max)` (`0xFFff…FFfF`) is a sentinel: passing it as `contractAddress` grants the delegation for **every** contract, not just one. No contract can be deployed at that address (EIP-55 invalid).
+
+Wildcard does not bypass `allow` — the delegator still needs persistent access on the handle. It only avoids per-contract registration.
+
+### Authoritative check used by KMS Connector
+
+```solidity
+function isHandleDelegatedForUserDecryption(
     address delegator,
     address delegate,
-    address contractAddress
+    address contractAddress,
+    bytes32 handle
 ) external view returns (bool);
 ```
 
-`delegate` and `revoke` both reject if `lastBlockDelegateOrRevoke == block.number` — delegation state cannot change twice in the same block. This blocks flash-loan / same-block manipulation. `expirationDate` must be in the future.
+This is the **single function the KMS Connector calls** for delegated user decryption. It internally checks:
+- The delegator has persistent access to `handle`.
+- The contract has persistent access to `handle`.
+- An active, non-expired delegation exists for `(delegator, delegate, contractAddress)` — or for `(delegator, delegate, WILDCARD_DELEGATION_ADDRESS)`.
 
-## Auto-grants by `FHEVMExecutor`
+There is no separate `isDelegatedForUserDecryption` getter — the handle-aware function is the only one. For checking just expiration metadata, use:
 
-When the executor returns an output handle, it auto-grants persistent access to `msg.sender` (the calling contract) — and to `tx.origin` where applicable. **This grant is for the current tx output only.** For state that persists, the contract must still call `FHE.allowThis(handle)` so it can read the value on the next tx.
+```solidity
+function getUserDecryptionDelegationExpirationDate(
+    address delegator,
+    address delegate,
+    address contractAddress
+) external view returns (uint64);
+```
+
+### Same-block protection
+
+`delegate*` and `revoke*` both reject if `lastBlockDelegateOrRevoke == block.number` — a delegator cannot delegate AND revoke (or delegate twice) in the same block. This applies only to delegation-state changes; **it does not prevent a decryption from happening in the same block as a delegation**.
+
+### Auto-grants by `FHEVMExecutor`
+
+When the executor returns an output handle, it auto-grants **transient** access (`ACL.allowTransient`) to `msg.sender` **only** — never `tx.origin`, never persistent.
+
+This means: the contract that just received the handle can use it for the rest of the **current** transaction. For any use in a **later** transaction, the contract must call `FHE.allowThis(handle)` to upgrade the grant to persistent. This is the #1 source of "compiles, deploys, silently fails on the next call" bugs.
+
+```solidity
+function example() public {
+    euint64 result = FHE.add(FHE.asEuint64(1), FHE.asEuint64(2));
+    // FHEVMExecutor auto-grants transient access to address(this) for `result`.
+    balances[msg.sender] = result;
+    // Without the next line, NEXT tx that reads balances[msg.sender] fails ACL check:
+    FHE.allowThis(result);
+    // And the user can decrypt only if you also do:
+    FHE.allow(result, msg.sender);
+}
+```
 
 ## Where ACL is enforced
 
@@ -118,9 +165,9 @@ The **host-chain ACL is the single source of truth**. There is no separate ACL s
 
 | Decryption type | Calls |
 |-----------------|-------|
-| Public          | `isAllowedForDecryption(handle)` |
-| User            | `isAllowed(handle, user)` AND `isAllowed(handle, contract)` |
-| Delegated user  | The user-decryption pair AND `isHandleDelegatedForUserDecryption(delegator, delegate, contract, handle)` |
+| Public          | `isAllowedForDecryption(handle)` per handle |
+| User            | `isAllowed(handle, user)` AND `isAllowed(handle, contract)` per pair |
+| Delegated user  | `isHandleDelegatedForUserDecryption(delegator, delegate, contract, handle)` per pair (single call — internally checks delegator allow, contract allow, and delegation freshness) |
 
 If any check fails, the KMS Connector rejects with `AUTHORIZATION_FAILED` and KMS Core is never invoked.
 
@@ -143,8 +190,6 @@ sequenceDiagram
         Note right of Connector: AUTHORIZATION_FAILED
     end
 ```
-
-User and delegated decryption follow the same shape with additional `isAllowed` / delegation checks.
 
 ### Relayer pre-check (non-authoritative)
 

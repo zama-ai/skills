@@ -5,12 +5,14 @@ A handle is a 32-byte deterministic commitment that identifies an encrypted valu
 ## Format
 
 ```text
-Byte index:  [0..20]   [21]    [22..29]          [30]       [31]
-Content:     random    index   chain ID (uint64) FHE type   version
-             21 bytes  (0x00)  big-endian        1 byte     1 byte
+Byte index:  [0..20]    [21]     [22..29]          [30]       [31]
+Content:     random     index    chain ID (uint64) FHE type   version
+             21 bytes   1 byte   big-endian        1 byte     1 byte
 ```
 
-The random prefix comes from a truncated keccak256 of the computation inputs. The lower 11 bytes are metadata, deterministically overwritten.
+The top 21 bytes come from a truncated keccak256 of the computation inputs. The remaining 11 bytes are metadata, deterministically overwritten in `_appendMetadataToPrehandle`.
+
+**Byte 21 is `0xff`** for any handle that comes from `FHEVMExecutor` computation (binary, unary, ternary, n-ary, cast, trivialEncrypt, fheRand). It distinguishes computation outputs from user-input handles where the byte indexes individual handles within an input batch.
 
 ## Extraction (host code)
 
@@ -26,48 +28,75 @@ Implemented in `HandleOps.sol` and used throughout validation.
 
 ## Generation
 
-**Computation handles** (deterministic FHE ops):
+The hash preimage for **every computation-derived handle** (binary, unary, ternary, n-ary, cast, trivial encryption, randomness) includes `blockhash(block.number - 1)` AND `block.timestamp`. Both are needed to defeat offline collision grinding (see "Collision resistance" below).
+
+**Binary ops** (`fheAdd`, `fheSub`, `fheMul`, `fheBitAnd`, `fheEq`, `fheMin`, `fheShl`, …):
 
 ```text
-hash = keccak256(
-    "FHE_comp" || opcode || lhs || rhs || scalarByte || acl || chainId || blockhash(block.number - 1)
+keccak256(
+    "FHE_comp" || opcode || lhs || rhs || scalarByte || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
 )
-handle = hash[:21] || 0x00 || chainId || fheType || version
 ```
 
-**Randomness handles** (`fheRand`, `fheRandBounded`):
+**Unary ops** (`fheNeg`, `fheNot`):
 
 ```text
-keccak256("FHE_seed" || counterRand++ || fheType)
+keccak256(
+    "FHE_comp" || opcode || ct || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
+)
 ```
 
-Per-contract monotonic counter — no `blockhash` input.
-
-**Trivial encryption handles** (`trivialEncrypt(pt, fheType)`):
+**Ternary ops** (`fheIfThenElse`):
 
 ```text
-keccak256("FHE_comp" || TRIVIAL_ENCRYPT_OPCODE || plaintext || fheType)
+keccak256(
+    "FHE_comp" || opcode || control || ifTrue || ifFalse || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
+)
 ```
 
-**Input handles**: computed by coprocessors from the user's ZKPoK and confirmed via threshold consensus on the gateway, then accepted by `FHEVMExecutor.verifyInput`.
+**N-ary ops** (`fheSum`, `fheIsIn`): preimage includes the `bytes32[] values` array (and for `fheIsIn`, the singleton `value` operand).
 
-## Collision resistance: why `blockhash` is in the preimage
-
-Of the 32 bytes in a handle, 21 carry hash output and 11 carry metadata. 168 bits gives a birthday bound near 2⁸⁴ — short of the 128-bit target. Before `blockhash` was mixed in, the preimage was fully deterministic and known before transaction submission:
+**Cast** (`cast(ct, toType)`):
 
 ```text
-op_hash = hash(operation_type, *argument_handles, chain_id)
+keccak256(
+    "FHE_comp" || CAST_OPCODE || ct || toType || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
+)
 ```
 
-An attacker could grind for a collision offline, then submit a colliding input. A collision means two distinct ciphertexts share a handle — subsequent ops silently use the wrong ciphertext.
+**Trivial encryption** (`trivialEncrypt(pt, fheType)`):
 
-Mixing in `blockhash(block.number - 1)` makes the preimage unpredictable until the previous block lands. The attacker has at most one block of wall-clock time after the hash is revealed to find a collision and get it on-chain. 2⁸⁴ work within a block time is infeasible. Block proposers see the hash earliest but face the same 2⁸⁴ bound within their proposal window. Gas overhead: `BLOCKHASH` (20) + one extra word in the encode (6) ≈ 26 gas per op.
+```text
+keccak256(
+    "FHE_comp" || TRIVIAL_ENCRYPT_OPCODE || pt || fheType || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
+)
+```
 
-This applies to all FHE compute handles via `_binaryOp`, `_unaryOp`, `_ternaryOp` in `FHEVMExecutor`. Excluded: `cast`, `trivialEncrypt`, and the `_generateSeed` path used by `fheRand` / `fheRandBounded` — these use different preimages.
+**Randomness seed** (`fheRand`, `fheRandBounded`), via `_generateSeed`:
 
-`prevrandao` was considered as an alternative source of unpredictability but rejected as the sole input — some rollups return a constant `prevrandao`, leaving those deployments unprotected. Block hash is reliable across all supported chains; `prevrandao` could be added in addition where available for marginally independent entropy.
+```text
+keccak256(
+    "FHE_seed" || counterRand || ACL
+    || block.chainid || blockhash(block.number - 1) || block.timestamp
+)
+```
 
-After a reorg, the same FHE op produces a different handle because the previous block hash differs — stale ciphertexts can't be confused with new ones. The threat-model edge case (op lands in the same position relative to the fork point) keeps the same handle and ciphertext.
+`counterRand` is a per-`FHEVMExecutor` monotonic counter, incremented per call. **The seed preimage does not include `fheType`** — the type is mixed in only when deriving the final randomness handle from the seed.
+
+**Input handles**: not derived from this scheme. They're computed by coprocessors from the user's ZKPoK and confirmed via threshold consensus on the gateway, then accepted by `FHEVMExecutor.verifyInput`. The 21-byte prefix comes from the ZKPoK verification, byte 21 indexes the handle within the input batch (`0x00`, `0x01`, ...), and the metadata bytes follow the same layout.
+
+## Collision resistance: why `blockhash` and `block.timestamp` are in the preimage
+
+Of the 32 bytes in a handle, 21 carry hash output and 11 carry metadata. 168 bits gives a birthday bound near 2⁸⁴ — short of the 128-bit target. Without unpredictable inputs, the preimage would be fully deterministic and an attacker could grind for a collision offline, then submit a colliding input. A collision means two distinct ciphertexts share a handle — subsequent ops silently use the wrong ciphertext.
+
+Mixing in `blockhash(block.number - 1)` and `block.timestamp` makes the preimage unpredictable until the previous block lands. The attacker has at most one block of wall-clock time after the values are revealed to find a collision and get it on-chain. 2⁸⁴ work within a block time is infeasible. Block proposers see these values earliest but face the same 2⁸⁴ bound within their proposal window. Gas overhead per op is negligible (a `BLOCKHASH`, a `TIMESTAMP`, and two extra words in the encode).
+
+After a reorg, the same FHE op produces a different handle because both the previous block hash and the timestamp differ — stale ciphertexts can't be confused with new ones. `prevrandao` was considered as an alternative source of unpredictability but rejected as the sole input — some rollups return a constant `prevrandao`, leaving those deployments unprotected. Block hash is reliable across all supported chains.
 
 ## Validation (per operation)
 
@@ -91,7 +120,7 @@ Everything else is subject to change between releases. Application code must not
 
 For **computations**:
 
-- *Same op on same inputs ⇒ same output handle.* Not true: `blockhash` is mixed in, so re-execution in a different block produces a different handle.
+- *Same op on same inputs ⇒ same output handle.* Not true: `blockhash` and `block.timestamp` are mixed in, so re-execution in a different block produces a different handle.
 - *Different ops on same inputs ⇒ different handles.* Not guaranteed: a future constant-propagation pass could collapse `Add(h2, h0)` and `Add(h0, h2)` to the same handle, or `Select` on a trivial condition could fold to one branch.
 
 For **ciphertexts**:

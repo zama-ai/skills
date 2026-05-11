@@ -4,19 +4,21 @@
 
 ## Caps
 
-| Cap | Field | Scope | Notes |
-|-----|-------|-------|-------|
-| Per-tx total | `maxHCUPerTx` | One transaction | Sum of all op costs in the tx |
-| Per-tx depth | `maxHCUDepthPerTx` | One transaction | Longest sequential dependency chain |
-| Per-block global | `globalHCUCapPerBlock` | One block, non-whitelisted senders only | Resets when `block.number` advances |
+| Cap | Field | Scope | Current mainnet/Sepolia deployment |
+|-----|-------|-------|-----------------------------------|
+| Per-tx total | `maxHCUPerTx` | One transaction (sum of all op costs) | `20_000_000` |
+| Per-tx depth | `maxHCUDepthPerTx` | One transaction (longest sequential dependency chain) | `5_000_000` |
+| Per-block global | `hcuPerBlock` | One block, non-whitelisted senders only | `281_474_976_710_655` (`type(uint48).max`) — effectively unbounded |
 
-Whitelisted accounts (via `blockHCUWhitelist`) skip the per-block cap but still respect per-tx caps. Whitelist write paths are `addToBlockHCUWhitelist` / `removeFromBlockHCUWhitelist`, both `onlyOwner`.
+The block cap is set high enough today that the per-tx caps are the binding constraint in practice. Whitelisted accounts (via `blockHCUWhitelist`) skip the block cap entirely but still respect per-tx caps.
+
+**Invariant enforced by the setters**: `hcuPerBlock ≥ maxHCUPerTx ≥ maxHCUDepthPerTx`. Setting a smaller `hcuPerBlock` than `maxHCUPerTx` reverts.
 
 ## Storage
 
 ```solidity
 struct HCULimitStorage {
-    uint48 globalHCUCapPerBlock;
+    uint48 hcuPerBlock;
     uint48 usedBlockHCU;
     uint48 lastSeenBlockNumber;
     uint48 maxHCUDepthPerTx;
@@ -35,21 +37,38 @@ cost = hcuTable[op][fheType]
 require(txHCUUsed  + cost <= maxHCUPerTx)
 require(txHCUDepth + cost <= maxHCUDepthPerTx)
 if (!whitelisted[msg.sender]):
-    require(usedBlockHCU + cost <= globalHCUCapPerBlock)
+    require(usedBlockHCU + cost <= hcuPerBlock)
     usedBlockHCU += cost
 txHCUUsed += cost
 ```
 
 Failure on any check reverts the operation.
 
+## Admin surface (`onlyACLOwner`)
+
+```solidity
+function setHCUPerBlock(uint48 hcuPerBlock) external onlyACLOwner;
+function setMaxHCUPerTx(uint48 maxHCUPerTx) external onlyACLOwner;
+function setMaxHCUDepthPerTx(uint48 maxHCUDepthPerTx) external onlyACLOwner;
+
+function addToBlockHCUWhitelist(address account) external onlyACLOwner;
+function removeFromBlockHCUWhitelist(address account) external onlyACLOwner;
+function isBlockHCUWhitelisted(address account) external view returns (bool);
+```
+
+All setters share `HCULimit`'s ownership with the ACL contract (`onlyACLOwner`, not the bare `onlyOwner`).
+
 ## Events
 
 ```solidity
-event GlobalHCUCapPerBlockUpdated(uint48 newCap);
-event MaxHCUPerTxUpdated(uint48 newMax);
-event MaxHCUDepthPerTxUpdated(uint48 newMax);
-event BlockHCUWhitelistUpdated(address account, bool added);
+event HCUPerBlockSet(uint48 hcuPerBlock);
+event MaxHCUPerTxSet(uint48 maxHCUPerTx);
+event MaxHCUDepthPerTxSet(uint48 maxHCUDepthPerTx);
+event BlockHCUWhitelistAdded(address indexed account);
+event BlockHCUWhitelistRemoved(address indexed account);
 ```
+
+Add and remove use separate events — there's no single "updated" event with a boolean.
 
 ## Cost intuition
 

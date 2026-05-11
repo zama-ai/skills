@@ -38,7 +38,7 @@ KMS Core is reachable only from its co-located connector — never publicly.
 | `core/threshold-execution` | MPC protocols: DKG, public/user decryption, resharing, CRS |
 | `core/threshold-networking` | mTLS-authenticated P2P, session routing, peer discovery via `MpcContext` |
 | `core/service/src/vault` | Three storage layers (private, public, backup) |
-| `fhevm/kms-connector` | `GatewayListener` → PostgreSQL → `KmsWorker` (gRPC to Core) → `TransactionSender` (back to gateway) |
+| `fhevm/kms-connector` | `gw-listener` → PostgreSQL → `kms-worker` (gRPC to Core) → `tx-sender` (back to gateway) |
 
 ## Key material
 

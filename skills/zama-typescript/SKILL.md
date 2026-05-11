@@ -1,13 +1,21 @@
 ---
 name: zama-typescript
-description: Integrate the Zama FHE SDK into TypeScript apps — React, browser, Node.js, MV3 extensions. Use when the user mentions `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, ViemSigner, EthersSigner, RelayerWeb, RelayerNode, ZamaProvider, useShield, useConfidentialBalance, useEncrypt, useUserDecrypt, useAllow, or any TypeScript/JavaScript code that encrypts inputs, reads encrypted handles, or decrypts FHE outputs. Also use for SDK setup, signer choice, session/delegation patterns, and React hook selection. For protocol concepts and architecture, load the zama-protocol skill. For Solidity contract development, load the zama-solidity skill.
+description: Integrate the Zama FHE SDK into TypeScript apps — React, browser, Node.js, MV3 extensions. Use when the user mentions `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, `@fhevm/sdk` (the low-level Relayer SDK), the legacy `@zama-fhe/relayer-sdk`, ViemSigner, EthersSigner, RelayerWeb, RelayerNode, ZamaProvider, createFhevmClient, encryptValues, decryptValues, readPublicValues, generateTransportKeypair, useShield, useConfidentialBalance, useEncrypt, useUserDecrypt, useAllow, or any TypeScript/JavaScript code that encrypts inputs, reads encrypted handles, or decrypts FHE outputs. Also use for SDK setup, signer choice, session/delegation patterns, and React hook selection. For protocol concepts, architecture, and the low-level SDK design deep-dive, load the zama-protocol skill. For Solidity contract development, load the zama-solidity skill.
 ---
 
 # Zama TypeScript — SDK Integration
 
-Integrate the Zama FHE SDK into browser apps, React apps, Node.js backends, browser extensions, and local Hardhat environments. React Native is not directly supported; use a Node backend and proxy.
+Integrate the Zama FHE SDK into browser apps, React apps, Node.js backends, browser extensions, and local setup environments. React Native is not directly supported; use a Node backend and proxy.
 
 **Before starting:** load the **zama-protocol** skill and read the universal gotchas — they cover protocol-level bugs that apply to all FHEVM work. What follows here is TypeScript/SDK-specific.
+
+## Which SDK?
+
+There are two TypeScript packages in this stack — pick deliberately:
+
+- **`@zama-fhe/sdk`** — recommended high-level wrapper. Adds session management, token helpers, React hooks (`@zama-fhe/react-sdk`), better error messages. Most of this skill (signers, `ZamaSDK`, `RelayerWeb` / `RelayerNode`, storage backends, `SepoliaConfig`, hooks, token API) documents this package. Repo: github.com/zama-ai/sdk · docs: docs.zama.org/protocol/sdk.
+- **`@fhevm/sdk`** — the low-level Relayer SDK that `@zama-fhe/sdk` wraps internally. Standalone action functions, narrow client factories (`createFhevmClient` / `EncryptClient` / `DecryptClient` / `BaseClient`), tightest possible bundles. Use it directly when you need raw `encryptValues` / `decryptValues` / `readPublicValues`, custom runtime composition, or are writing a wrapper of your own. For the full surface, see the **zama-protocol** skill's `references/design/fhevm-sdk.md`.
+- **`@zama-fhe/relayer-sdk`** — legacy. Being phased out in favour of `@fhevm/sdk`. Migrate when convenient.
 
 ---
 
@@ -24,7 +32,7 @@ This file is a router for SDK usage. Choose one environment setup first, then lo
 | Browser + ethers | `references/typescript/setups/browser-ethers.md` |
 | Node.js (scripts, servers, workers) | `references/typescript/setups/node-backend.md` |
 | MV3 browser extension | `references/typescript/setups/extension-mv3.md` |
-| Local Hardhat / cleartext | `references/typescript/setups/local-hardhat.md` |
+| Local Setup / cleartext | `references/typescript/setups/localhost-setup.md` |
 
 ### Task references (pick as needed)
 
@@ -58,12 +66,11 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 - **Do not use `WagmiSigner`** from `@zama-fhe/react-sdk/wagmi` until the upstream bundling issue is fixed. Use wagmi for UI/account state and build a `ViemSigner` after connect.
 
-- **Cleanup in Node.** Call `sdk.terminate()` on shutdown to stop worker threads.
-
 - **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but `useEncrypt` / `useUserDecrypt` support custom FHE contracts (voting, auctions, identity). Route those to `references/typescript/sdk-custom-contract-flows.md`.
 
 ## Canonical sources
 
-- **SDK repo:** https://github.com/zama-ai/sdk
-- **SDK docs:** https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/
-- **SDK examples:** https://github.com/zama-ai/sdk/tree/main/examples/
+- **`@zama-fhe/sdk` repo:** https://github.com/zama-ai/sdk
+- **`@zama-fhe/sdk` docs:** https://docs.zama.org/protocol/sdk
+- **`@zama-fhe/sdk` examples:** https://github.com/zama-ai/sdk/tree/main/examples/
+- **`@fhevm/sdk` (low-level):** https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
