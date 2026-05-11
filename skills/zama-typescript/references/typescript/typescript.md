@@ -19,7 +19,7 @@ When a detail is missing, inspect examples in `https://github.com/zama-ai/sdk/tr
 - `setups/browser-ethers.md` - browser app using `@zama-fhe/sdk` with ethers
 - `setups/node-backend.md` - Node.js scripts, servers, workers, and custom signer backends
 - `setups/extension-mv3.md` - MV3 extension with persistent session signatures
-- `setups/local-hardhat.md` - cleartext mode for local Hardhat, Hoodi, or other unsupported-chain testing
+- `setups/localhost-setup.md` - cleartext mode for local Hardhat, Hoodi, or other unsupported-chain testing
 
 ## Mental model
 
@@ -73,10 +73,9 @@ transports: {
 
 - **Package landscape.** Install `@zama-fhe/sdk` explicitly. `@zama-fhe/react-sdk` requires it as a peer dependency and pnpm will not install peers automatically.
 - **Sepolia needs no relayer proxy.** `SepoliaConfig.relayerUrl` already points at the public Zama testnet relayer. Spread `SepoliaConfig` as-is and leave `relayerUrl` alone. Only override it on mainnet.
-- **Relayer API key (mainnet only).** Browser apps must proxy mainnet relayer requests through their own backend to keep the API key server-side. Node scripts pass `auth: { __type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly.
+- **Relayer API key (mainnet only).** Browser apps must proxy mainnet relayer requests through their own backend to keep the API key server-side. Node scripts pass `auth: { type: "ApiKeyHeader", value: process.env.RELAYER_API_KEY }` directly.
 - **COOP/COEP headers required for browser.** `RelayerWeb` uses a Web Worker with WASM + `SharedArrayBuffer`. Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Vite: `server.headers`. Next.js: `async headers()` in config.
 - **Use the high-level token API for ERC-7984.** `sdk.createToken(addr)` returns a `Token` with `.shield`, `.balanceOf`, `.confidentialTransfer`, `.unshield`. Use `useEncrypt` / `useUserDecrypt` for custom FHE contracts such as auctions and voting.
-- **Cleanup in Node.** Call `sdk.terminate()` on shutdown to stop worker threads.
 - **Encrypt -> ABI conversion.** `encrypt()` returns `handles: Uint8Array[]` and `inputProof: Uint8Array`. Wrap with viem `bytesToHex` or `ethers.hexlify` before passing to contract calls; ABIs expect `bytes32` or `bytes`.
 - **Ciphertexts bind to one target contract.** The `contractAddress` in `encrypt()` must be the contract that will consume it. Encrypt per hop.
 - **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but the same stack also supports custom FHE contracts. Route those cases to `sdk-custom-contract-flows.md`.

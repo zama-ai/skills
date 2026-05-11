@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents (Claude Code, Cursor, Copilot, e
 
 ## Project
 
-**zama-protocol** — a Claude Code plugin containing three skills for AI agents building confidential smart contracts with Zama's FHEVM.
+A Claude Code plugin (id: `zama-protocol`, marketplace: `zama-skills`) bundling three skills for AI agents building confidential smart contracts with Zama's FHEVM. Note: the plugin id happens to match one of the bundled skill names — context disambiguates.
 
 - **Install:** `/plugin marketplace add zama-ai/skills && /plugin install zama-protocol@zama-skills`
 - **License:** BSD-3-Clause-Clear

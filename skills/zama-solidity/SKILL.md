@@ -30,7 +30,7 @@ Load on demand — don't read them all up front.
 
 These supplement the universal gotchas in the zama-protocol skill.
 
-- **Inherit `ZamaEthereumConfig` first.** It sets the correct coprocessor addresses per `block.chainid`. Without it, FHE calls silently fail.
+- **Inherit `ZamaEthereumConfig` first.** It sets the FHEVM coprocessor addresses (`ACL`, `FHEVMExecutor`, `KMSVerifier`) per `block.chainid`. Without it, those addresses default to `address(0)` and every FHE op reverts the moment it tries to call them — with no revert reason, because the EVM is calling an empty account. Confusing to debug if you don't know to look for it.
 
 - **Use ERC-7984 for any confidential token.** Never reimplement encrypted balances, allowances, or transfers. `@openzeppelin/confidential-contracts` has the audited implementation. See `references/solidity/erc7984.md`.
 
@@ -40,7 +40,7 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 - **Silent failures on insufficient balance.** FHE contracts transfer 0 via `FHE.select` — no revert. Test the zero-transfer case and call every function twice to prove ACL persistence.
 
-- **Foundry needs `via_ir = true`; Hardhat does not.**
+- **`via_ir` is a `solc` setting, not a build-tool requirement.** Both Foundry and Hardhat call the same compiler. The official templates (`fhevm-foundry-template`, `fhevm-hardhat-template`) compile FHE contracts without IR — start from them. If `solc` reports "stack too deep" on your own contracts, enable IR (`via_ir = true` in Foundry, `viaIR: true` in Hardhat). Don't enable it preemptively as a cargo-cult based on older Zama docs.
 
 - **`FHE.makePubliclyDecryptable(handle)` after every update** to a publicly-decryptable state variable.
 

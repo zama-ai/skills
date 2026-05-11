@@ -1,4 +1,4 @@
-# zama-protocol
+# Zama Skills
 
 The missing knowledge between AI agents and production encrypted smart contracts.
 
@@ -6,7 +6,7 @@ Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Enc
 
 ## What is this?
 
-A Claude Code plugin containing three skills that teach AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
+A Claude Code plugin (id: `zama-protocol`, in the `zama-skills` marketplace) that bundles three skills teaching AI agents (and developers) how to build confidential dApps with FHEVM. Fills verified LLM blind spots — things stock models get wrong about encrypted smart contracts.
 
 | Skill               | What it covers                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------ |

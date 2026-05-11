@@ -1,4 +1,4 @@
-# Local Hardhat / cleartext setup
+# Localhost - Cleartext setup
 
 **Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/local-development.md`
 
@@ -21,3 +21,5 @@ const sdk = new ZamaSDK({ relayer, signer, storage: memoryStorage });
 const token = sdk.createToken("0xYourToken");
 await token.shield(1000n);
 ```
+
+Example implementation of cleartext setup is in https://github.com/zama-ai/fhevm-react-template

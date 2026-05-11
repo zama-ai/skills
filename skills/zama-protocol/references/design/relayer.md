@@ -20,7 +20,7 @@ All endpoints are versioned under `/v2/`. POST returns a job ID; GET polls. Resp
 }
 ```
 
-Pending requests respond `202` with a `Retry-After` header.
+`"succeeded"` (not `"completed"`) is the terminal success status. Pending requests respond `202` with a `Retry-After` header.
 
 ### Input proof
 
@@ -59,12 +59,23 @@ GET  /v2/public-decrypt/{job_id}
 ```
 
 ```json
-{ "handles": ["0x..."], "contractChainId": "<chain_id>", "extraData": "00" }
+{
+  "ciphertextHandles": ["0x..."],
+  "extraData":         "00"
+}
 ```
 
-All handles must be marked publicly decryptable in the host ACL (validated before queuing).
+The host chain is inferred from the handles' embedded chain ID — there is **no** `contractChainId` field in this endpoint. All handles must be marked publicly decryptable in the host ACL (validated before queuing).
 
-Result: `{ "plaintext": "<abi-encoded>", "signatures": ["0x..."] }`.
+Result:
+
+```json
+{
+  "decryptedValue": "<abi-encoded values>",
+  "signatures":     ["0x..."],
+  "extraData":      "00"
+}
+```
 
 ### User decryption
 
@@ -88,7 +99,17 @@ GET  /v2/user-decrypt/{job_id}
 
 `signature` is the user's EIP-712 signature over `UserDecryptRequestVerification`, generated client-side with the user's Ethereum private key.
 
-Result: `{ "userDecryptedShares": ["..."], "signatures": ["0x..."] }`. The user combines shares client-side; see [./flow-user-decryption.md](./flow-user-decryption.md).
+Result:
+
+```json
+{
+  "result": [
+    { "payload": "<signcrypted share hex>", "signature": "0x...", "extraData": "00" }
+  ]
+}
+```
+
+The shares are returned as an **array of objects** (one per KMS node), not as parallel arrays. The user combines shares client-side; see [./flow-user-decryption.md](./flow-user-decryption.md).
 
 ### Delegated user decryption
 
@@ -97,7 +118,24 @@ POST /v2/delegated-user-decrypt
 GET  /v2/delegated-user-decrypt/{job_id}
 ```
 
-Same shape as user decryption, plus `delegatorAddress`, `delegateAddress`. **The `signature` field is signed by the delegator**, not the delegate.
+Body shape differs from user decryption — `requestValidity` is flattened to top-level fields, and the delegator/delegate replace `userAddress`:
+
+```json
+{
+  "handleContractPairs": [{ "handle": "0x...", "contractAddress": "0x..." }],
+  "startTimestamp":      "1700000000",
+  "durationDays":        "1",
+  "contractsChainId":    "<chain_id>",
+  "contractAddresses":   ["0x..."],
+  "delegatorAddress":    "0x...",
+  "delegateAddress":     "0x...",
+  "publicKey":           "<transport public key hex>",
+  "signature":           "<130-hex EIP-712 from delegator>",
+  "extraData":           "00"
+}
+```
+
+The `signature` is signed by the **delegator** (the ciphertext owner), not the delegate.
 
 ### Key material
 
@@ -105,24 +143,46 @@ Same shape as user decryption, plus `delegatorAddress`, `delegateAddress`. **The
 GET /v2/keyurl
 ```
 
-Returns the URLs for the active FHE public key and CRS. The client fetches them to encrypt inputs and generate ZK proofs.
+Returns the URLs for the active FHE public key and CRS — nested under `response`:
 
 ```json
-{ "fhePublicKeyUrl": "https://...", "crsUrl": "https://..." }
+{
+  "status": "succeeded",
+  "response": {
+    "fheKeyInfo": [
+      { "fhePublicKey": { "dataId": "...", "urls": ["https://..."] } }
+    ],
+    "crs": {
+      "2048": { "dataId": "...", "urls": ["https://..."] }
+    }
+  }
+}
 ```
+
+The CRS map is keyed by ZK proof bit-size. Clients pick the right CRS for the bit size they're proving over (`2048` covers all current request sizes since `MAX_DECRYPTION_REQUEST_BITS = 2048`).
+
+## Protocol limits to respect
+
+Worth surfacing in clients before submission:
+
+| Limit | Value | Where enforced |
+|-------|-------|----------------|
+| `MAX_USER_DECRYPT_CONTRACT_ADDRESSES` | `10` | Gateway `Decryption` |
+| `MAX_USER_DECRYPT_DURATION_DAYS` | `365` | Gateway `Decryption` |
+| `MAX_DECRYPTION_REQUEST_BITS` | `2048` (sum of plaintext bit-sizes in one decryption request) | Gateway `Decryption` |
 
 ## Validation pipeline
 
 Performed before queuing:
 
-1. **Chain ID** — `contractChainId` is a registered host chain. Fail → `400`.
+1. **Chain ID** — for endpoints that take it, the chain must be a registered host chain. Fail → `400`.
 2. **Host ACL** — multicall against the host ACL, grouped by chain:
 
 | Operation | Check |
 |-----------|-------|
 | Public decryption | `ACL.isAllowedForDecryption(handle)` per handle |
 | User decryption | `ACL.isAllowed(handle, userAddress)` AND `ACL.isAllowed(handle, contractAddress)` per pair |
-| Delegated user decryption | `ACL.isHandleDelegatedForUserDecryption(delegator, delegate, contract, handle)` per pair |
+| Delegated user decryption | `ACL.isHandleDelegatedForUserDecryption(delegator, delegate, contract, handle)` per pair (single call — internally checks delegator allow, contract allow, and delegation freshness) |
 
 ACL failure → `400` with `error.label: "not_allowed_on_host_acl"`. RPC failure → `500` with `error.label: "host_acl_failed"`.
 
@@ -147,11 +207,11 @@ Background
   TxInFlight → wait for receipt
   ReceiptReceived → blockchain listener watches for response event
   EventMatched → decode, persist result
-  Completed | Failed | TimedOut(30 min)
+  Succeeded | Failed | TimedOut(30 min)
 
 GET /v2/{operation}/{job_id}
   Queued / Processing → 202 + Retry-After (queue-position-aware estimate)
-  Completed → 200 + result
+  Succeeded → 200 + result
   Failed | TimedOut → 200 + error
 ```
 
@@ -161,22 +221,28 @@ GET /v2/{operation}/{job_id}
 |-----------|----------|--------|
 | Input proof | `InputVerification` | `verifyProofRequest(contractChainId, contractAddress, userAddress, ciphertextWithZKProof, extraData)` |
 | Public decryption | `Decryption` | `publicDecryptionRequest(ctHandles[], extraData)` |
-| User decryption | `Decryption` | `userDecryptionRequest(ctHandleContractPairs[], validity, contractsInfo, userAddress, publicKey, signature, extraData)` |
-| Delegated user decryption | `Decryption` | `delegatedUserDecryptionRequest(ctHandleContractPairs[], validity, delegationAccounts, contractsInfo, publicKey, signature, extraData)` |
+| User decryption | `Decryption` | `userDecryptionRequest(ctHandleContractPairs[], requestValidity, contractsInfo, userAddress, publicKey, signature, extraData)` |
+| Delegated user decryption | `Decryption` | `delegatedUserDecryptionRequest(ctHandleContractPairs[], requestValidity, delegationAccounts, contractsInfo, publicKey, signature, extraData)` |
+
+Note: `delegationAccounts` is a single struct `{ delegatorAddress, delegateAddress }` that comes BEFORE `contractsInfo`.
 
 ## Gateway events listened for
 
 | Event | Source | Relayer action |
 |-------|--------|----------------|
-| `VerifyProofResponse(requestId, accepted, handles, signatures)` | `InputVerification` | Decode, store |
-| `PublicDecryptionResponse(requestId, plaintext, signatures)` | `Decryption` | Decode plaintext, store |
-| `UserDecryptionResponseThresholdReached(requestId, shares[], signatures[])` | `Decryption` | Store shares + signatures |
+| `VerifyProofResponse(zkProofId, ctHandles, signatures)` | `InputVerification` | Decode, store as `{ accepted: true, handles, signatures }` |
+| `RejectProofResponse(zkProofId)` | `InputVerification` | Store as `{ accepted: false }` |
+| `PublicDecryptionResponse(decryptionId, decryptedResult, signatures, extraData)` | `Decryption` | Decode, store |
+| `UserDecryptionResponse(decryptionId, response, signature, extraData)` (per KMS node) | `Decryption` | Collect into a buffer keyed by `decryptionId` |
+| `UserDecryptionResponseThresholdReached(decryptionId)` | `Decryption` | Mark the buffered shares for this `decryptionId` as complete |
+
+User decryption is two events: per-node `UserDecryptionResponse` events carry the shares, then a payload-free `UserDecryptionResponseThresholdReached` event signals "you have enough — finalise this job."
 
 ## Back-pressure and deduplication
 
 - **POST when full**: `429` with `Retry-After: <RFC 7231 timestamp>` from estimated drain time.
 - **GET while processing**: `202` with `Retry-After: <seconds>` from request position and known coprocessor/KMS stage latencies (configurable via `copro_kms_backoff_intervals`).
-- **Dedup**: request hash (SHA-256 of normalised params) drives a uniqueness index on active rows; completed-request hits return the stored result without reprocessing.
+- **Dedup**: request hash (SHA-256 of normalised params) drives a uniqueness index on active rows; succeeded-request hits return the stored result without reprocessing.
 
 ## Storage
 

@@ -16,13 +16,13 @@ For any confidential token (encrypted ERC20, private-balance token, FHE token), 
 
 ## Gotchas (read before writing any FHE code)
 
-- **Setup**: inherit `ZamaEthereumConfig`. Foundry needs `via_ir = true`; Hardhat does not.
+- **Setup**: inherit `ZamaEthereumConfig` (otherwise FHE op calls go to `address(0)` and revert with no reason). For build config, start from the official templates (`fhevm-foundry-template`, `fhevm-hardhat-template`) and don't enable `via_ir` / `viaIR` preemptively — it's a `solc` feature you turn on only when `solc` actually reports "stack too deep."
 - **Default type**: `euint64` for balances. `euint256` is dramatically more expensive per op.
 - **Confidentiality**: `FHE.fromExternal()` is real encryption. `FHE.asEuintX(plaintext)` is **visible onchain** — constants only.
 - **No `view`**: FHE ops are state-changing (coprocessor calls).
 - **Control flow**: `ebool` cannot go in `if`/`require`/`while`. Use `FHE.select(cond, ifTrue, ifFalse)` — both branches must be encrypted values (materialise `FHE.asEuint64(0)`, not a literal), and both branches always execute (rejected paths still pay for their transfers/ops).
 - **No encrypted divisor**: `FHE.div`/`FHE.rem` only accept a **plaintext** divisor. Redesign any formula with encrypted state in the divisor.
-- **ACL (#1 bug)**: call `FHE.allowThis()` after creating/computing encrypted values, or the contract can't use them on the next call — silent failure, no revert. `ERC7984` handles this internally; only hand-written FHE code needs it. For single-tx cross-contract handles prefer `FHE.allowTransient` over persistent `FHE.allow`.
+- **ACL (#1 bug)**: call `FHE.allowThis()` after creating/computing encrypted values, or the next call that reads the stored handle reverts with `ACLNotAllowed`. The failure is **deferred** — the deploy and first interaction succeed, the bug shows up on the second call. `ERC7984` handles this internally; only hand-written FHE code needs it. For single-tx cross-contract handles prefer `FHE.allowTransient` over persistent `FHE.allow`.
 - **Input ciphertexts bind to one target contract**: `encryptUint64(value, user, target)` ties the proof to exactly `target`. Every hop needs its own encryption. Wrong target → runtime ACL revert with no compile hint.
 - **Events**: never emit encrypted values — handle changes leak mutation timing. Emit addresses only.
 - **Silent failures**: on insufficient balance FHE contracts transfer 0 via `FHE.select` — no revert. Test the zero-transfer case and call every function twice to prove ACL.
@@ -30,7 +30,7 @@ For any confidential token (encrypted ERC20, private-balance token, FHE token), 
 - **Decryption**: async Gateway in production; `decrypt`, `userDecrypt`, etc. are test-only helpers and don't exist on production `FHE.sol`. Make decryption the last step — no conditional actions after.
 - **Info leaks**: reverting on an encrypted condition reveals it. Same for conditional events, differing return values, or gas differences tied to encrypted state.
 - **Overloaded ERC-7984 functions**: call with explicit signature, e.g. `token["confidentialTransfer(address,bytes32,bytes)"](...)`.
-- **HCU limits**: per-tx 20M, sequential depth 5M, per-block 5M. Prefer scalar operands, smallest type that fits, split functions over 10M. Full tables: https://github.com/zama-ai/fhevm/blob/main/docs/solidity-guides/hcu.md
+- **HCU limits**: per-tx 20M (`maxHCUPerTx`), per-tx sequential depth 5M (`maxHCUDepthPerTx`), per-block `uint48.max` (`hcuPerBlock` — effectively unbounded today, so the per-tx caps are the binding constraint). Prefer scalar operands, smallest type that fits, split functions over 10M. Full tables: https://github.com/zama-ai/fhevm/blob/main/docs/solidity-guides/hcu.md
 - **Standard Solidity still applies**: CEI + `nonReentrant`, SafeERC20, access control, no hardcoded `1e18` (ERC-7984 uses **6** decimals), Sepolia before mainnet.
 
 ## Sources
