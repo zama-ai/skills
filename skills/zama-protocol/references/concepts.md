@@ -60,7 +60,18 @@ Be honest with developers. FHEVM is wrong for:
 ### The Layer Stack
 
 ```
-User/Browser
+User dApp / Browser
+    ↓
+@zama-fhe/sdk  ← recommended high-level SDK (wraps the relayer SDK,
+    ↓            adds session management, hooks, better errors)
+                 repo: https://github.com/zama-ai/sdk
+                 docs: https://docs.zama.org/protocol/sdk
+
+@fhevm/sdk     ← low-level Relayer SDK (replaces the older
+    ↓            @zama-fhe/relayer-sdk).
+                 repo: https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
+                 Most dApps should never import this directly —
+                 use @zama-fhe/sdk above.
     ↓ HTTPS
 Relayer (public API — the ONLY entry point)
     ↓ transactions
@@ -68,8 +79,14 @@ Gateway Contracts (shared L2)
     ↓ events
 Coprocessors (off-chain TFHE compute) + KMS (threshold decryption)
     ↓ responses
-Gateway Contracts → Relayer → User
+Gateway Contracts → Relayer → SDK → User
 ```
+
+**Which SDK to import:**
+
+- New code: `@zama-fhe/sdk` (and `@zama-fhe/react-sdk` for React). This is the supported high-level surface.
+- `@fhevm/sdk` exists for advanced users who need direct relayer access. It is also what `@zama-fhe/sdk` is built on top of internally.
+- Legacy `@zama-fhe/relayer-sdk` is being phased out in favour of `@fhevm/sdk`. Migrate when convenient.
 
 **Host Chain Contracts** (deployed on Ethereum/Sepolia where your dApp lives):
 
@@ -102,7 +119,7 @@ Gateway Contracts → Relayer → User
 | KMS Connector | Bridges Gateway events to KMS Core gRPC API |
 | Relayer | Public HTTPS API for all user/dApp interactions |
 
-> **Tech spec reference:** `architecture/overview.md`, `architecture/components/`
+> **Design reference:** [design/architecture-overview.md](./design/architecture-overview.md)
 
 ### Handles — Not Ciphertexts
 
@@ -125,7 +142,7 @@ Every encrypted value in your contract is a **32-byte handle**:
 - Trivial encryption: `keccak256("FHE_comp" || TRIVIAL_ENCRYPT || plaintext || fheType)`
 - Input: Computed by coprocessors from ZKPoK, confirmed via threshold consensus
 
-> **Tech spec reference:** `architecture/components/fhevm/handles.md`, `rfcs/009-opaque-handles.md`, `rfcs/010-unpredictable-compute-handles.md`
+> **Design reference:** [design/handles.md](./design/handles.md)
 
 ### Symbolic Execution — What Really Happens When You Call FHE.add()
 
@@ -146,7 +163,7 @@ When your contract calls `FHE.add(a, b)`:
 
 **This means:** Your contract gets the handle instantly. The actual FHE computation happens asynchronously. For most operations this is transparent — the handle is usable immediately for further operations. Decryption is the only flow where you wait for the off-chain pipeline to complete.
 
-> **Tech spec reference:** `architecture/flows/fhe-computation.md`, `architecture/components/fhevm/coprocessor.md`
+> **Design reference:** [design/flow-fhe-computation.md](./design/flow-fhe-computation.md), [design/coprocessor.md](./design/coprocessor.md)
 
 ---
 
@@ -183,7 +200,7 @@ Miss `FHE.allowThis()` and the contract silently fails on the next transaction t
 - **No same-block changes** — ACL delegation changes cannot take effect in the same block they're made (prevents manipulation)
 - Revoke with `FHE.revokeDelegationForUserDecryption(delegate, contract)`
 
-> **Tech spec reference:** `architecture/components/fhevm/acl.md`, `rfcs/001-simple-acl.md`
+> **Design reference:** [design/acl.md](./design/acl.md)
 
 ---
 
@@ -274,7 +291,7 @@ POST /v2/user-decrypt
 
 Returns signcrypted shares — the frontend decrypts with the ML-KEM private key and reconstructs plaintext via Lagrange interpolation.
 
-> **Tech spec reference:** `architecture/components/fhevm/relayer.md`
+> **Design reference:** [design/relayer.md](./design/relayer.md)
 
 ---
 
@@ -322,7 +339,7 @@ Use for: private balances, personal data — values only the owner should see.
 
 Same as user decryption, but a **delegate** decrypts on behalf of the user. The delegator must have called `FHE.delegateForUserDecryption(delegate, contract, expirationDate)` beforehand.
 
-> **Tech spec reference:** `architecture/flows/public-decryption.md`, `architecture/flows/user-decryption.md`
+> **Design reference:** [design/flow-public-decryption.md](./design/flow-public-decryption.md), [design/flow-user-decryption.md](./design/flow-user-decryption.md)
 
 ---
 
@@ -343,7 +360,7 @@ When users encrypt values client-side (using `@zama-fhe/sdk`), they must prove t
 
 **Why ZKPoK:** Without it, a user could submit garbage ciphertexts and break contract logic. The proof guarantees the ciphertext is well-formed and the user knows the plaintext they encrypted.
 
-> **Tech spec reference:** `architecture/flows/input-verification.md`
+> **Design reference:** [design/flow-input-verification.md](./design/flow-input-verification.md)
 
 ---
 
@@ -367,7 +384,7 @@ For per-operation HCU costs, load the **zama-solidity** skill and see `reference
 - If a function uses >10M HCU (50% of limit), split into multiple transactions
 - **Estimate HCU for the full function, not just your loop.** If your function composes on top of ERC-7984 transfers or other FHE-heavy operations, those costs stack. A single confidential transfer already costs ~500K+ HCU (comparison + select + sub + add + ACL). Budget your batch sizes against the remaining headroom, not the raw limit.
 
-> **Tech spec reference:** `architecture/components/fhevm/hcu-limits.md`
+> **Design reference:** [design/hcu-limits.md](./design/hcu-limits.md)
 
 ---
 
@@ -383,7 +400,7 @@ No single party can forge results or decrypt without authorization.
 - Public decryption: `t + 1` nodes must return identical plaintext
 - User decryption: `2*t + 1` nodes must return distinct Lagrange shares
 
-> **Tech spec reference:** `architecture/components/kms/overview.md`, `architecture/components/kms/threshold-mpc.md`
+> **Design reference:** [design/kms-overview.md](./design/kms-overview.md), [design/kms-threshold-mpc.md](./design/kms-threshold-mpc.md)
 
 ---
 
@@ -427,8 +444,9 @@ Setup instructions live in the domain skills. Load the one matching your stack:
 |---------|---------|
 | `@fhevm/solidity` | Solidity library — FHE.sol, encrypted types, configs |
 | `@fhevm/hardhat-plugin` | Hardhat plugin — local FHE mock for testing |
-| `@zama-fhe/sdk` | Frontend SDK — encrypt/decrypt client-side |
-| `@zama-fhe/react-sdk` | React hooks for the SDK |
+| `@zama-fhe/sdk` | **Recommended** high-level SDK — encrypt/decrypt client-side, session management, better DX. Repo: [zama-ai/sdk](https://github.com/zama-ai/sdk). Docs: [docs.zama.org/protocol/sdk](https://docs.zama.org/protocol/sdk) |
+| `@zama-fhe/react-sdk` | React hooks layered on `@zama-fhe/sdk` |
+| `@fhevm/sdk` | Low-level Relayer SDK ([fhevm/sdk/js-sdk](https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk)). Replaces the older `@zama-fhe/relayer-sdk`. `@zama-fhe/sdk` wraps this — prefer the wrapper unless you specifically need raw Relayer calls. |
 | `@openzeppelin/confidential-contracts` | Production patterns — ERC-7984, confidential tokens |
 
 ---
@@ -471,31 +489,31 @@ Sepolia testnet does not require an API key.
 
 ---
 
-## Tech Spec References
+## Design References
 
-For deep protocol details, reference the Zama Protocol technical specifications at `https://github.com/zama-ai/tech-spec/tree/new-tech-specs`:
+Deeper protocol design notes are bundled with this skill under `references/design/`:
 
-| Topic | Spec path |
-|-------|-----------|
-| Architecture overview | `architecture/overview.md` |
-| Handle format & generation | `architecture/components/fhevm/handles.md` |
-| ACL system | `architecture/components/fhevm/acl.md` |
-| Coprocessor architecture | `architecture/components/fhevm/coprocessor.md` |
-| Relayer API | `architecture/components/fhevm/relayer.md` |
-| HCU gas model | `architecture/components/fhevm/hcu-limits.md` |
-| KMS & threshold MPC | `architecture/components/kms/overview.md` |
-| Decryption flows | `architecture/flows/public-decryption.md`, `architecture/flows/user-decryption.md` |
-| Input verification flow | `architecture/flows/input-verification.md` |
-| FHE computation flow | `architecture/flows/fhe-computation.md` |
-
-Full spec index: `architecture/README.md`. RFCs: `rfcs/README.md`.
+| Topic | File |
+|-------|------|
+| Architecture overview | [design/architecture-overview.md](./design/architecture-overview.md) |
+| Handle format, generation, opacity rules | [design/handles.md](./design/handles.md) |
+| ACL system & where it's enforced | [design/acl.md](./design/acl.md) |
+| Coprocessor architecture | [design/coprocessor.md](./design/coprocessor.md) |
+| Relayer API | [design/relayer.md](./design/relayer.md) |
+| HCU gas model | [design/hcu-limits.md](./design/hcu-limits.md) |
+| KMS overview | [design/kms-overview.md](./design/kms-overview.md) |
+| KMS threshold MPC | [design/kms-threshold-mpc.md](./design/kms-threshold-mpc.md) |
+| Public decryption flow | [design/flow-public-decryption.md](./design/flow-public-decryption.md) |
+| User decryption flow | [design/flow-user-decryption.md](./design/flow-user-decryption.md) |
+| Input verification flow | [design/flow-input-verification.md](./design/flow-input-verification.md) |
+| FHE computation flow | [design/flow-fhe-computation.md](./design/flow-fhe-computation.md) |
 
 ---
 
 ## Resources
 
 - **Zama Protocol Docs:** https://docs.zama.ai
-- **Tech Specs:** https://github.com/zama-ai/tech-spec/tree/new-tech-specs
+- **Protocol changelog (current running version):** https://docs.zama.org/protocol/changelog
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
 - **Forge FHEVM:** https://github.com/zama-ai/forge-fhevm
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts

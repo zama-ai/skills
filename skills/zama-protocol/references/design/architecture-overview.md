@@ -1,0 +1,61 @@
+# FHEVM: System Overview
+
+FHEVM lets smart contracts compute on encrypted data. On-chain execution is **symbolic**: `FHEVMExecutor` validates and emits handles instantly; the real TFHE computation happens off-chain in coprocessors, triggered by the events.
+
+## Layer stack
+
+```text
+User / dApp client (browser, Node, MV3)
+    │  HTTPS
+Relayer (only public entry point)
+    │  on-chain tx
+Gateway contracts (shared L2)
+    │  events
+KMS Connector (one per KMS node)  +  Coprocessors (host-chain events too)
+    │
+KMS Core (threshold MPC)         Coprocessor workers (TFHE compute, ZKPoK verify)
+```
+
+## Host-chain contracts (per chain)
+
+| Contract        | Role |
+|-----------------|------|
+| `FHEVMExecutor` | Symbolic execution: type/ACL/HCU checks, deterministic handle, emit event |
+| `ACL`           | Persistent / transient / decryption / delegation access lists |
+| `InputVerifier` | Validates coprocessor signatures on user inputs |
+| `KMSVerifier`   | Validates KMS signatures on decryption results |
+| `HCULimit`      | Per-tx and per-block HCU budgets |
+| `PauserSet`     | Emergency pause |
+
+## Gateway contracts (shared L2)
+
+| Contract            | Role |
+|---------------------|------|
+| `GatewayConfig`     | Registry: KMS nodes, coprocessors, host chains, thresholds |
+| `Decryption`        | Public + user decryption request/response lifecycle |
+| `CiphertextCommits` | Coprocessor-confirmed ciphertext digests |
+| `InputVerification` | ZKPoK verification via coprocessor consensus |
+| `KMSGeneration`     | DKG and CRS ceremony orchestration |
+| `ProtocolPayment`   | Fee collection |
+
+## Off-chain components
+
+| Component     | Role |
+|---------------|------|
+| Coprocessor   | TFHE compute (host events) + ZKPoK verify (gateway events) |
+| KMS Core      | Holds secret-key shares, performs threshold decryption |
+| KMS Connector | Bridges gateway events to KMS Core's gRPC (localhost) |
+| Relayer       | Public HTTPS API for users and dApps |
+
+## Design principles
+
+- **Relayer-only ingress** — users never send transactions to the gateway directly. The Relayer pre-validates host ACL, submits the gateway tx, and stores results for polling.
+- **Event-driven coprocessor** — host events drive computation; gateway events drive input verification. No direct user-to-coprocessor channel.
+- **Symbolic execution** — `FHEVMExecutor` never performs FHE. It emits a deterministic handle; coprocessors materialize the ciphertext asynchronously.
+- **Threshold throughout** — both coprocessors (`coprocessorThreshold` for input verification and ciphertext commits) and KMS nodes (`t+1` public, `2t+1` user) operate in threshold configurations.
+
+## See also
+
+- [./handles.md](./handles.md) · [./acl.md](./acl.md) · [./hcu-limits.md](./hcu-limits.md) · [./coprocessor.md](./coprocessor.md) · [./relayer.md](./relayer.md)
+- [./flow-input-verification.md](./flow-input-verification.md) · [./flow-fhe-computation.md](./flow-fhe-computation.md) · [./flow-public-decryption.md](./flow-public-decryption.md) · [./flow-user-decryption.md](./flow-user-decryption.md)
+- [./kms-overview.md](./kms-overview.md) · [./kms-threshold-mpc.md](./kms-threshold-mpc.md)
