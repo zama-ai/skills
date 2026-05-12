@@ -1,0 +1,34 @@
+{
+  "name": "zama-protocol",
+  "description": "Three skills for building confidential dApps on Zama's FHEVM: protocol concepts & addresses, encrypted Solidity, and TypeScript SDK integration.",
+  "author": {
+    "name": "Zama Team",
+    "email": "plugins@zama.ai",
+    "url": "https://zama.ai"
+  },
+  "license": "BSD-3-Clause-Clear",
+  "repository": "https://github.com/zama-ai/skills",
+  "keywords": [
+    "fhe",
+    "fhevm",
+    "zama",
+    "ethereum",
+    "solidity",
+    "typescript",
+    "encryption",
+    "privacy",
+    "smart-contracts",
+    "confidential-computing"
+  ],
+  "version": "0.2.0",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "zama-protocol",
+    "shortDescription": "Three skills for building confidential dApps on Zama's FHEVM: protocol concepts & addresses, encrypted Solidity, and TypeScript SDK integration.",
+    "developerName": "Zama Team",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}
