@@ -1,0 +1,95 @@
+---
+description: Detailed reference for erc7984 (zama-solidity skill)
+alwaysApply: false
+---
+
+# Erc7984
+
+_Reference for zama-solidity skill (zama-protocol plugin)_
+
+# ERC-7984 Confidential Tokens
+
+Read this when building a confidential token (encrypted ERC20, private-balance token, FHE token). **Use the ERC-7984 standard from OpenZeppelin's confidential contracts library.** Never reimplement encrypted balances, allowances, or transfers.
+
+- Repo: https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
+- Standard: ERC-7984, the confidential fungible token interface for fhEVM
+
+## Mintable & Burnable Confidential Token
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.27;
+
+import {FHE, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC7984} from "@openzeppelin/confidential-contracts/token/ERC7984/ERC7984.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+
+contract MyConfidentialToken is ERC7984, Ownable, ZamaEthereumConfig {
+    constructor(
+        address owner,
+        string memory name_,
+        string memory symbol_,
+        string memory uri_
+    ) ERC7984(name_, symbol_, uri_) Ownable(owner) {}
+
+    function mint(address to, externalEuint64 amount, bytes memory proof) external onlyOwner {
+        _mint(to, FHE.fromExternal(amount, proof));
+    }
+
+    function burn(address from, externalEuint64 amount, bytes memory proof) external onlyOwner {
+        _burn(from, FHE.fromExternal(amount, proof));
+    }
+}
+```
+
+## What ERC-7984 provides
+
+| Function | Description |
+|---|---|
+| `confidentialTransfer(to, encAmount, proof)` | Transfer with encrypted input |
+| `confidentialTransferFrom(from, to, encAmount, proof)` | Operator/delegated transfer |
+| `confidentialTransferAndCall(...)` | Transfer + receiver hook (ERC-7984 Receiver) |
+| `confidentialBalanceOf(account)` | Returns encrypted balance handle |
+| `confidentialTotalSupply()` | Returns encrypted total supply |
+| `setOperator(operator, until)` / `isOperator(...)` | Time-bound operator approvals |
+| `requestDiscloseEncryptedAmount(amount)` | Request decryption disclosure |
+| `discloseEncryptedAmount(amount, cleartext, proof)` | Verify and disclose a decrypted amount |
+| `name()` / `symbol()` / `decimals()` (= **6**, not 18) / `contractURI()` | Standard metadata |
+
+## External inputs don't proxy — convert in the caller
+
+`FHE.fromExternal(handle, proof)` only works when called from the contract the proof was encrypted against. If your contract receives an `externalEuint64` from a user and wants to hand it to the token (e.g. an auction escrowing a bid), **convert it yourself first, then call the `euint64` overload of the token**:
+
+```solidity
+function placeBid(externalEuint64 encBid, bytes calldata proof) external {
+    euint64 bid = FHE.fromExternal(encBid, proof); // proof bound to THIS contract
+    FHE.allowThis(bid);
+    FHE.allowTransient(bid, address(token));       // let the token read the handle
+    token.confidentialTransferFrom(msg.sender, address(this), bid); // euint64 overload
+    // ... fold / escrow / etc.
+}
+```
+
+Do **not** pass `(encBid, proof)` straight into `confidentialTransferFrom(..., externalEuint64, bytes)`. That overload calls `FHE.fromExternal` inside the *token's* context, so the ZKPoK binding check compares the proof's target against the token address even though the user encrypted against your auction. It reverts deep inside `InputVerifier` with `InvalidSigner`, with no compile hint.
+
+Rule: **the contract that owns the proof must be the one that calls `FHE.fromExternal`.** The downstream token call then takes the resulting persistent `euint64`, never the external input. The bidder still needs to have called `token.setOperator(yourContract, until)` first, since `confidentialTransferFrom` gates on operator approval.
+
+## Extensions
+
+Under `@openzeppelin/confidential-contracts/token/ERC7984/extensions/`:
+
+| Extension | Purpose |
+|---|---|
+| `ERC7984Freezable` | Freeze/unfreeze accounts |
+| `ERC7984Restricted` | Transfer restrictions |
+| `ERC7984ObserverAccess` | Read access for observers |
+| `ERC7984Omnibus` | Omnibus accounts |
+| `ERC7984Rwa` | Real-world asset features |
+| `ERC7984Votes` | Governance voting on encrypted balances |
+| `ERC7984ERC20Wrapper` | Wrap an existing ERC20 into ERC-7984 |
+
+## Example projects
+
+- https://github.com/zama-ai/protocol-apps/tree/main/contracts — production contracts
+- https://github.com/zama-ai/dapps — full confidential dApps with frontends

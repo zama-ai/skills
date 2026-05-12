@@ -1,0 +1,95 @@
+---
+description: Detailed reference for react wagmi (zama-typescript skill)
+alwaysApply: false
+---
+
+# React Wagmi
+
+_Reference for zama-typescript skill (zama-protocol plugin)_
+
+# React + wagmi setup
+
+**Canonical docs:**
+
+- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (React + wagmi tab)
+- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/reference/react/ZamaProvider.md`
+
+```bash
+pnpm add @zama-fhe/react-sdk @zama-fhe/sdk \
+         @tanstack/react-query wagmi viem
+```
+
+`@zama-fhe/sdk` is a **required peer** of `@zama-fhe/react-sdk` — install both
+explicitly. The React wrapper re-exports from it, but pnpm won't install peers
+for you.
+
+**Never guess a version number** when writing these into `package.json`.
+Stock training data pins `^0.2.0`, which has been dead for months — the real
+line is `2.x`. Let `pnpm add` resolve `latest`, or run `pnpm view @zama-fhe/sdk version`
+first and pin what you see. Do not hand-write a caret range from memory.
+
+## Don't use `@zama-fhe/react-sdk/wagmi`
+
+`WagmiSigner` is exported but its bundle imports a nonexistent
+`watchConnection` from `wagmi/actions` — still broken as of `react-sdk@2.2.0`.
+Types resolve, `pnpm typecheck` passes, and then `next build` (or any real
+bundler) fails with `Attempted import error: 'watchConnection' is not exported
+from 'wagmi/actions'`. Use `ViemSigner` from `@zama-fhe/sdk/viem` instead —
+wagmi still runs the UI layer (`useAccount`, `useReadContract`) against the
+same EIP-1193 provider.
+
+## Signer must be built after connect
+
+`ViemSigner` requires `walletClient.account` to be hoisted at construction and
+throws `WalletClient has no account` otherwise. You can't build it at module
+scope — you don't know the account until the user connects. Gate the
+`ZamaProvider` behind a boundary keyed on `useAccount`:
+
+```tsx
+// App.tsx
+const { address } = useAccount();
+return address
+  ? <ZamaBoundary account={address}><Portfolio /></ZamaBoundary>
+  : <ConnectButton />;
+```
+
+```tsx
+// zama-boundary.tsx — rebuild signer whenever account changes
+import { createPublicClient, createWalletClient, custom, http } from "viem";
+import { sepolia } from "viem/chains";
+import { ZamaProvider, RelayerWeb, SepoliaConfig, indexedDBStorage } from "@zama-fhe/react-sdk";
+import { ViemSigner } from "@zama-fhe/sdk/viem";
+
+export function ZamaBoundary({ account, children }) {
+  const { signer, relayer } = useMemo(() => {
+    const eth = window.ethereum;
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC) });
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: custom(eth) });
+    const signer = new ViemSigner({ publicClient, walletClient, ethereum: eth });
+    const relayer = new RelayerWeb({
+      getChainId: () => signer.getChainId(),
+      transports: { [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC } },
+    });
+    return { signer, relayer };
+  }, [account]);
+
+  return <ZamaProvider relayer={relayer} signer={signer} storage={indexedDBStorage}>{children}</ZamaProvider>;
+}
+```
+
+## Next.js app router: force dynamic
+
+Both Privy and the Zama WASM worker are browser-only and blow up during static
+prerendering (Privy throws on an invalid app ID; the relayer touches `window`).
+Opt the root layout out of prerender:
+
+```tsx
+// app/layout.tsx
+export const dynamic = "force-dynamic";
+```
+
+Next read:
+
+- `../react.md` for provider/storage, hook selection, and decrypt UX
+- `../tokens.md` for ERC-7984 token flows
+- `../custom-contracts.md` for non-token FHE contracts

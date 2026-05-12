@@ -1,0 +1,76 @@
+---
+description: Detailed reference for addresses (zama-protocol skill)
+alwaysApply: false
+---
+
+# Addresses
+
+_Reference for zama-protocol skill (zama-protocol plugin)_
+
+# Contract Addresses
+
+**Full address list:** https://docs.zama.org/protocol/protocol-apps/addresses
+
+This file covers the addresses you actually need when building confidential dApps: configuration, confidential wrappers, and their underlying ERC-20s. For staking, governance, pausing, cross-chain OFTs, and everything else, use the docs link above.
+
+## Configuration — Use ZamaEthereumConfig
+
+Don't hardcode coprocessor/ACL/KMS addresses. `ZamaEthereumConfig` detects the chain and wires the correct ones for mainnet (1), Sepolia (11155111), and local Hardhat (31337).
+
+```solidity
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+
+contract MyContract is ZamaEthereumConfig { /* ... */ }
+```
+
+Wrong coprocessor address = silent ACL failures or reverted FHE ops. Always inherit the config.
+
+## Confidential Wrapper Tokens
+
+Official wrappers that turn a standard ERC-20 into an ERC-7984 with encrypted balances. Use these instead of building your own confidential wrapper for these tokens.
+
+### Ethereum Mainnet
+
+| Symbol | Wrapper | Underlying | Decimals |
+|---|---|---|---|
+| `cUSDC` | [`0xe978F22157048E5DB8E5d07971376e86671672B2`](https://etherscan.io/address/0xe978F22157048E5DB8E5d07971376e86671672B2) | [USDC `0xA0b8…eB48`](https://etherscan.io/address/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48) | **6** |
+| `cUSDT` | [`0xAe0207C757Aa2B4019Ad96edD0092ddc63EF0c50`](https://etherscan.io/address/0xAe0207C757Aa2B4019Ad96edD0092ddc63EF0c50) | [USDT `0xdAC1…1ec7`](https://etherscan.io/address/0xdAC17F958D2ee523a2206206994597C13D831ec7) | **6** |
+| `cWETH` | [`0xda9396b82634Ea99243cE51258B6A5Ae512D4893`](https://etherscan.io/address/0xda9396b82634Ea99243cE51258B6A5Ae512D4893) | [WETH `0xC02a…56Cc2`](https://etherscan.io/address/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2) | 18 |
+| `cZAMA` | [`0x80CB147Fd86dC6dEe3Eee7e4Cee33d1397d98071`](https://etherscan.io/address/0x80CB147Fd86dC6dEe3Eee7e4Cee33d1397d98071) | [ZAMA `0xA12C…f4f3`](https://etherscan.io/address/0xA12CC123ba206d4031D1c7f6223D1C2Ec249f4f3) | 18 |
+
+**Wrappers Registry:** [`0xeb5015fF021DB115aCe010f23F55C2591059bBA0`](https://etherscan.io/address/0xeb5015fF021DB115aCe010f23F55C2591059bBA0)
+
+Remember: USDC and USDT have **6 decimals**, not 18. ERC-7984 itself also uses **6**. Never hardcode `1e18`.
+
+Additional mainnet wrappers (`cBRON`, `ctGBP`, `cXAUt`) exist — see the docs link for the full list.
+
+### Sepolia Testnet (Mock Wrappers)
+
+Mocks wrap mintable ERC-20s with a public `mint(address, uint256)` capped at 1,000,000 tokens per call. Use these for local testing — the ZAMA mock is **not** the real Sepolia ZAMA token.
+
+| Symbol | Wrapper | Underlying |
+|---|---|---|
+| `cUSDCMock` | [`0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639`](https://sepolia.etherscan.io/address/0x7c5BF43B851c1dff1a4feE8dB225b87f2C223639) | [`0x9b5Cd13b8eFbB58Dc25A05CF411D8056058aDFfF`](https://sepolia.etherscan.io/address/0x9b5Cd13b8eFbB58Dc25A05CF411D8056058aDFfF) |
+| `cUSDTMock` | [`0x4E7B06D78965594eB5EF5414c357ca21E1554491`](https://sepolia.etherscan.io/address/0x4E7B06D78965594eB5EF5414c357ca21E1554491) | [`0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0`](https://sepolia.etherscan.io/address/0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0) |
+| `cWETHMock` | [`0x46208622DA27d91db4f0393733C8BA082ed83158`](https://sepolia.etherscan.io/address/0x46208622DA27d91db4f0393733C8BA082ed83158) | [`0xff54739b16576FA5402F211D0b938469Ab9A5f3F`](https://sepolia.etherscan.io/address/0xff54739b16576FA5402F211D0b938469Ab9A5f3F) |
+| `cZAMAMock` | [`0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB`](https://sepolia.etherscan.io/address/0xf2D628d2598aF4eAF94CB76a437Ff86CA78FfbFB) | [`0x75355a85c6FB9df5f0C80FF54e8747EEe9a0BF57`](https://sepolia.etherscan.io/address/0x75355a85c6FB9df5f0C80FF54e8747EEe9a0BF57) |
+
+**Wrappers Registry (Sepolia):** [`0x2f0750Bbb0A246059d80e94c454586a7F27a128e`](https://sepolia.etherscan.io/address/0x2f0750Bbb0A246059d80e94c454586a7F27a128e)
+
+## ZAMA Token
+
+| Chain | Address |
+|---|---|
+| Ethereum Mainnet | [`0xA12CC123ba206d4031D1c7f6223D1C2Ec249f4f3`](https://etherscan.io/address/0xA12CC123ba206d4031D1c7f6223D1C2Ec249f4f3) |
+| Sepolia Testnet | [`0xa798B04149e7a61cc95B7D114AD420e8969eA268`](https://sepolia.etherscan.io/address/0xa798B04149e7a61cc95B7D114AD420e8969eA268) |
+
+Cross-chain OFT deployments (BSC, HyperEVM, Gateway, Solana): see the docs link.
+
+## Verifying Addresses
+
+```bash
+cast code 0x... --rpc-url https://eth.llamarpc.com
+# "0x" means no contract at that address
+```
+
+**Never trust addresses from LLM memory alone.** Always cross-check against https://docs.zama.org/protocol/protocol-apps/addresses or the latest `@fhevm/solidity` package.

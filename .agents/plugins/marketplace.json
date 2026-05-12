@@ -1,0 +1,23 @@
+{
+  "name": "zama-skills",
+  "interface": {
+    "displayName": "Zama Skills"
+  },
+  "plugins": [
+    {
+      "name": "zama-protocol",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Developer Tools",
+      "interface": {
+        "displayName": "zama-protocol"
+      }
+    }
+  ]
+}

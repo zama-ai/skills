@@ -1,0 +1,68 @@
+---
+description: Detailed reference for kms overview (zama-protocol skill)
+alwaysApply: false
+---
+
+# Kms Overview
+
+_Reference for zama-protocol skill (zama-protocol plugin)_
+
+# KMS: System Overview
+
+The Zama KMS is a distributed threshold cryptography service for TFHE keys. No single party ever holds the complete secret key — DKG, public decryption, user decryption, and CRS generation all run as MPC protocols.
+
+## Deployment modes
+
+| Mode | When |
+|------|------|
+| Centralized | Single node, plaintext (or HSM/Nitro Enclave) keys. Dev, testing, or sealed-enclave deployments. |
+| Threshold | `n ≥ 3t + 1` nodes. Malicious-majority safe — up to `t` actively Byzantine nodes tolerated. |
+
+Both modes expose the same gRPC interface, so the engine choice is transparent to the connector.
+
+## Topology
+
+```text
+Gateway (KMSGeneration, Decryption)
+    │ events
+KMS Connector  ── one per KMS node ──  (only component with both gateway RPC and KMS gRPC)
+    │ gRPC, localhost only
+KMS Core
+    ├─ gRPC service (CoreServiceEndpoint)
+    ├─ Engine (CentralizedKms | ThresholdKms)
+    ├─ Threshold networking (inter-node mTLS)
+    └─ Storage
+        ├─ Private vault (encrypted key shares, file or S3)
+        ├─ Public keychain (public/server/compression keys, CRS — unencrypted)
+        └─ Backup vault (custodian-encrypted)
+```
+
+KMS Core is reachable only from its co-located connector — never publicly.
+
+## Components
+
+| Module | Role |
+|--------|------|
+| `core/service` | gRPC service, two engines (centralized, threshold) |
+| `core/threshold-execution` | MPC protocols: DKG, public/user decryption, resharing, CRS |
+| `core/threshold-networking` | mTLS-authenticated P2P, session routing, peer discovery via `MpcContext` |
+| `core/service/src/vault` | Three storage layers (private, public, backup) |
+| `fhevm/kms-connector` | `gw-listener` → PostgreSQL → `kms-worker` (gRPC to Core) → `tx-sender` (back to gateway) |
+
+## Key material
+
+| Material | Holder | Location |
+|----------|--------|----------|
+| Secret key share | Node-local | Private vault (encrypted) |
+| FHE public key | Public | Public keychain |
+| Server (bootstrapping) key | Public | Public keychain |
+| Compression keys | Public | Public keychain |
+| CRS | Public | Public keychain |
+
+## gRPC surface
+
+`CoreServiceEndpoint` covers key generation and preprocessing, public and user decryption, CRS generation, context/epoch management, backup/recovery, and health. See the kms-core gRPC API (not bundled in this skill).
+
+## See also
+
+- [./kms-threshold-mpc.md](./kms-threshold-mpc.md) — MPC protocols (DKG, threshold decryption, resharing)
