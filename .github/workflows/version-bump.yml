@@ -1,0 +1,83 @@
+name: version-bump
+
+# Enforces that any PR which touches skills/** also bumps the version in
+# .claude-plugin/marketplace.json — the single source of truth per CLAUDE.md.
+#
+# Checks:
+#   1. metadata.version increased vs the base branch
+#   2. plugins[0].version increased vs the base branch
+#   3. metadata.version == plugins[0].version (kept in lockstep)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'skills/**'
+      - '.claude-plugin/marketplace.json'
+
+permissions: {}
+
+concurrency:
+  group: version-bump-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-version:
+    name: marketplace.json version bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Compare versions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          MANIFEST=.claude-plugin/marketplace.json
+
+          # Head versions (current PR state)
+          head_meta=$(jq -r '.metadata.version' "$MANIFEST")
+          head_plug=$(jq -r '.plugins[0].version' "$MANIFEST")
+
+          # Base versions (target branch state)
+          base_meta=$(git show "$BASE_SHA:$MANIFEST" | jq -r '.metadata.version')
+          base_plug=$(git show "$BASE_SHA:$MANIFEST" | jq -r '.plugins[0].version')
+
+          echo "metadata.version:    $base_meta → $head_meta"
+          echo "plugins[0].version:  $base_plug → $head_plug"
+
+          # 1. Lockstep: metadata.version must equal plugins[0].version
+          if [ "$head_meta" != "$head_plug" ]; then
+            echo "::error::metadata.version ($head_meta) and plugins[0].version ($head_plug) must match in $MANIFEST"
+            exit 1
+          fi
+
+          # 2. metadata.version must have increased
+          if [ "$base_meta" = "$head_meta" ]; then
+            echo "::error::metadata.version unchanged ($head_meta). PRs touching skills/** must bump the version in $MANIFEST."
+            exit 1
+          fi
+          highest=$(printf '%s\n%s\n' "$head_meta" "$base_meta" | sort -V | tail -n 1)
+          if [ "$highest" != "$head_meta" ]; then
+            echo "::error::metadata.version decreased ($base_meta → $head_meta). Versions must strictly increase (semver)."
+            exit 1
+          fi
+
+          # 3. plugins[0].version must have increased (redundant with #1+#2 but explicit)
+          if [ "$base_plug" = "$head_plug" ]; then
+            echo "::error::plugins[0].version unchanged ($head_plug). Bump $MANIFEST."
+            exit 1
+          fi
+
+          echo "::notice::Version bump OK: $base_meta → $head_meta"

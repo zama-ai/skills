@@ -1,0 +1,17 @@
+# URL patterns lychee should ignore (regex).
+# Add only deliberately-fake / placeholder URLs that appear in example code.
+
+# Placeholder hosts used in skill examples
+^https?://your-app\.com
+^https?://example\.com
+^https?://localhost
+^https?://127\.0\.0\.1
+
+# Documentation placeholder values (RPC URLs with template tokens)
+YOUR_KEY
+YOUR_API_KEY
+INFURA_KEY
+ALCHEMY_KEY
+
+# Local file scheme (lychee already skips file://)
+^file://

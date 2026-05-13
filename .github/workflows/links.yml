@@ -1,0 +1,63 @@
+name: links
+
+# Verifies all URLs referenced from Markdown in the repo still resolve.
+#
+# Runs on:
+#   - pull_request:   any change to Markdown in the repo
+#   - push to main:   catches links broken by a merge
+#   - weekly cron:    catches links that rot post-merge (Mondays 06:00 UTC)
+#   - workflow_dispatch: manual trigger
+#
+# Excluded URL patterns live in .lycheeignore at the repo root.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - '.lycheeignore'
+      - '.github/workflows/links.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - '.lycheeignore'
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: links-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  link-check:
+    name: lychee
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --max-concurrency 16
+            --timeout 30
+            --accept 200,206,429
+            './**/*.md'
+          fail: true
