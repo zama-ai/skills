@@ -15,3 +15,6 @@ ALCHEMY_KEY
 
 # Local file scheme (lychee already skips file://)
 ^file://
+
+# Etherscan blocks CI traffic with 403 — addresses are stable and don't need link checking
+^https?://(www\.)?etherscan\.io/

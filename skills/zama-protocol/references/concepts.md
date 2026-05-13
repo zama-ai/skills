@@ -130,7 +130,7 @@ See [design/hcu-limits.md](./design/hcu-limits.md) for current caps, event names
 
 There are no protocol fees at the moment. To use the Relayer on mainnet, developers need an **API key**.
 
-- **Apply:** https://docs.zama.org/protocol/relayer-sdk-guides/fhevm-relayer/mainnet-api-key
+- **Apply:** https://docs.zama.org/protocol/sdk/guides/relayer-api-keys
 - **Requirement:** End-to-end integration must be tested on Sepolia testnet before mainnet access is granted.
 - **Billing:** Usage-based monthly billing.
 - **Security:** Never embed the API key in frontend code. For browser dApps, use a backend proxy that injects the `x-api-key` header. Store keys in environment variables.
