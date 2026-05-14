@@ -16,11 +16,13 @@ Read this when building a confidential token (encrypted ERC20, private-balance t
 
 ## When to use ERC-7984
 
-Two patterns to check for — both resolved by inheriting ERC-7984 from `@openzeppelin/confidential-contracts`:
+Three patterns to check for — first two are resolved by inheriting ERC-7984 from `@openzeppelin/confidential-contracts`, the third by using an already-deployed wrapper instead of deploying your own:
 
 - **Reinventing ERC-7984.** The contract maintains its own `mapping(address => euint64) balances` (or similar) with hand-rolled transfer and allowance logic. The OpenZeppelin implementation is audited and already handles ACL, transient allowance handles, and the silent-zero-transfer semantics that hand-rolled versions routinely get wrong. Replace the custom mapping with `ERC7984` inheritance.
 
 - **Missing value leg entirely.** The contract *looks* like a confidential financial primitive — named fund, vault, pool, escrow, payroll, subscription, auction settlement, payment — accepts an `externalEuint64` amount, runs cap/policy checks, updates encrypted aggregates… but never imports `IERC7984` / `@openzeppelin/confidential-contracts` and never invokes `confidentialTransfer*`. The contract is an encrypted policy/attestation engine, not a financial primitive: its "exposure" is a sum of *claimed intent*, not held assets. Grep the repo for `IERC7984`, `confidentialTransfer`, and `@openzeppelin/confidential-contracts` before signing off. If absent, either confirm the project explicitly documents this (README says "no token movement") and flag the disclosure, or raise it as a finding. Reviewers — including agents running this skill — routinely sign off on the FHE plumbing while missing that no token is ever imported, approved, or transferred.
+
+- **Reinventing a confidential wrapper for a token that already has one.** Zama already deploys official ERC-7984 wrappers for the most common ERC-20s — `cUSDC`, `cUSDT`, `cWETH`, `cZAMA` on mainnet, with mock counterparts on Sepolia. See `references/addresses.md` for the full list and the Wrappers Registry. Before deploying a custom `ERC7984ERC20Wrapper` (or a hand-rolled wrap/unwrap pair) for USDC/USDT/WETH/ZAMA, **use the deployed wrapper.** Redeploying fragments the encrypted balance pool, breaks composability with other dApps that already integrate the official wrapper, and skips the audited registry. Custom wrappers only make sense for ERC-20s that do not yet have an official confidential wrapper — and even then, check `references/addresses.md` first.
 
 The reminder under "Solidity-specific reminders" in `SKILL.md` is the entry point; this section is what it cross-links to.
 
