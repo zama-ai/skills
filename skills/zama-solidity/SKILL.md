@@ -1,6 +1,7 @@
 ---
 name: zama-solidity
 description: Write confidential Solidity smart contracts on Zama's FHEVM. Use when the user is writing, reviewing, or debugging encrypted Solidity — FHE types (euint64, ebool), ACL (FHE.allowThis/allow), FHE.select, ERC-7984 confidential tokens, ZamaEthereumConfig, `@fhevm/solidity`, `@openzeppelin/confidential-contracts`, Foundry or Hardhat setup for FHEVM, or any Solidity code that uses the FHE library. For protocol concepts and architecture, load the zama-protocol skill. For TypeScript SDK integration, load the zama-typescript skill.
+license: BSD-3-Clause-Clear
 ---
 
 # Zama Solidity — Confidential Smart Contracts

@@ -1,6 +1,7 @@
 ---
 name: zama-protocol
 description: Zama Protocol concepts, architecture, and planning for FHEVM (Fully Homomorphic Encryption on Ethereum). Use when the user asks about FHE concepts, protocol architecture, how the coprocessor/relayer/gateway/KMS works, ACL semantics, handle format, HCU limits, decryption flows, the low-level `@fhevm/sdk` design, whether FHE fits their use case, planning a confidential dApp, or needs verified FHEVM contract addresses. Also load this skill first whenever the user mentions FHEVM, Zama, or encrypted onchain computation — it carries the universal gotchas that apply to both Solidity and TypeScript work. For writing Solidity contracts, load the zama-solidity skill. For TypeScript SDK integration and the `@zama-fhe/sdk` wrapper, load the zama-typescript skill.
+license: BSD-3-Clause-Clear
 ---
 
 # Zama Protocol — FHEVM Concepts & Architecture
