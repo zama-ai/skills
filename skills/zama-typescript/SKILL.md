@@ -1,6 +1,7 @@
 ---
 name: zama-typescript
 description: Integrate the Zama FHE SDK into TypeScript apps — React, browser, Node.js, MV3 extensions. Use when the user mentions `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, `@fhevm/sdk` (the low-level Relayer SDK), the legacy `@zama-fhe/relayer-sdk`, ViemSigner, EthersSigner, RelayerWeb, RelayerNode, ZamaProvider, createFhevmClient, encryptValues, decryptValues, readPublicValues, generateTransportKeypair, useShield, useConfidentialBalance, useEncrypt, useUserDecrypt, useAllow, or any TypeScript/JavaScript code that encrypts inputs, reads encrypted handles, or decrypts FHE outputs. Also use for SDK setup, signer choice, session/delegation patterns, and React hook selection. For protocol concepts, architecture, and the low-level SDK design deep-dive, load the zama-protocol skill. For Solidity contract development, load the zama-solidity skill.
+license: BSD-3-Clause-Clear
 ---
 
 # Zama TypeScript — SDK Integration

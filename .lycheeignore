@@ -18,3 +18,4 @@ ALCHEMY_KEY
 
 # Etherscan blocks CI traffic with 403 — addresses are stable and don't need link checking
 ^https?://(www\.)?etherscan\.io/
+^https?://(www\.)?sepolia\.etherscan\.io/

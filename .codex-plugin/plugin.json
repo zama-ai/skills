@@ -20,7 +20,7 @@
     "smart-contracts",
     "confidential-computing"
   ],
-  "version": "0.3.1",
+  "version": "0.3.2",
   "skills": "./skills/",
   "interface": {
     "displayName": "zama-protocol",
