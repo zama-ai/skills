@@ -30,16 +30,10 @@ Update later with `/plugin marketplace update zama-skills`.
 ### Any AI agent (via `npx skills`)
 
 ```bash
-npx skills add git@github.com:zama-ai/skills.git
+npx skills add zama-ai/skills
 ```
 
-If that fails, clone first:
-
-```bash
-git clone git@github.com:zama-ai/skills.git /tmp/zama-skills
-npx skills add /tmp/zama-skills --list   # pick which skills to install
-npx skills add /tmp/zama-skills
-```
+Add `--list` to pick which skills to install: `npx skills add zama-ai/skills --list`.
 
 Prefer a global install under `~/.agents` over per-project. Update later with `npx skills update`.
 
