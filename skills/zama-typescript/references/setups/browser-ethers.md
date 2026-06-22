@@ -6,30 +6,33 @@
 pnpm add @zama-fhe/sdk ethers
 ```
 
-`EthersSigner` in the browser takes the **raw EIP-1193 provider**, not an `ethers.Wallet`:
+`createConfig` from `@zama-fhe/sdk/ethers` builds the ethers signer internally. In the
+browser, pass the **raw EIP-1193 provider** via `ethereum` (not an `ethers.Wallet`):
 
 ```ts
-import { ZamaSDK, RelayerWeb, SepoliaConfig, indexedDBStorage } from "@zama-fhe/sdk";
-import { EthersSigner } from "@zama-fhe/sdk/ethers";
+import { ZamaSDK, indexedDBStorage } from "@zama-fhe/sdk";
+import { sepolia, type FheChain } from "@zama-fhe/sdk/chains";
+import { createConfig } from "@zama-fhe/sdk/ethers";
+import { web } from "@zama-fhe/sdk/web";
 
-const signer = new EthersSigner({ ethereum: window.ethereum! });
+// Spread the `sepolia` chain preset as-is. Its relayerUrl already points at the
+// public testnet relayer. Only override on mainnet (proxy the API key).
+const zamaSepolia = { ...sepolia, network: RPC } as const satisfies FheChain;
 
-const sdk = new ZamaSDK({
-  relayer: new RelayerWeb({
-    getChainId: () => signer.getChainId(),
-    transports: {
-      // Sepolia: spread SepoliaConfig as-is. Its relayerUrl already points at
-      // the public testnet relayer. Only override on mainnet (proxy the API key).
-      [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC },
-    },
+const sdk = new ZamaSDK(
+  createConfig({
+    chains: [zamaSepolia],
+    ethereum: window.ethereum!, // browser: raw EIP-1193 provider
+    storage: indexedDBStorage,
+    relayers: { [zamaSepolia.id]: web() },
   }),
-  signer,
-  storage: indexedDBStorage,
-});
+);
 
-const token = sdk.createToken("0xYourEncryptedERC20");
-await token.shield(1000n);
+// Balance / transfer → Token; shield / unshield → WrappedToken.
+const token = sdk.createToken("0xYourConfidentialToken");
 await token.confidentialTransfer("0xRecipient", 500n);
+const wrapped = sdk.createWrappedToken("0xYourWrapper");
+await wrapped.shield(1000n);
 ```
 
-Needs COOP/COEP headers - see `../overview.md` Universal SDK gotchas.
+Needs COOP/COEP headers — see `../overview.md` Universal SDK gotchas.

@@ -4,70 +4,66 @@ Use this note when the question is about package choice, sub-path imports, relay
 
 ## Package map
 
-| Need | Package |
+| Need | Package / sub-path |
 |---|---|
 | Core SDK in browser or Node.js | `@zama-fhe/sdk` |
 | React hooks and `ZamaProvider` | `@zama-fhe/react-sdk` |
-| viem signer adapter | `@zama-fhe/sdk/viem` |
-| ethers signer adapter | `@zama-fhe/sdk/ethers` |
-| React + wagmi signer adapter | `@zama-fhe/sdk/viem` |
-| Node.js relayer/runtime helpers | `@zama-fhe/sdk/node` |
-| Cleartext runtime for local or unsupported chains | `@zama-fhe/sdk/cleartext` |
+| `createConfig` + viem signer adapter | `@zama-fhe/sdk/viem` |
+| `createConfig` + ethers signer adapter | `@zama-fhe/sdk/ethers` |
+| `createConfig` for React + wagmi | `@zama-fhe/react-sdk/wagmi` |
+| `web()` browser relayer transport | `@zama-fhe/sdk/web` |
+| `node()` relayer transport + `asyncLocalStorage` | `@zama-fhe/sdk/node` |
+| `cleartext()` transport for local/unsupported chains | `@zama-fhe/sdk` (or `@zama-fhe/sdk/node`) |
+| Chain presets (`sepolia`, `mainnet`, …) | `@zama-fhe/sdk/chains` |
+| TanStack Query option factories | `@zama-fhe/sdk/query` |
 
-## Runtime choice
+## Relayer transport choice
 
-| Runtime | Use |
+Pass a transport per chain in `createConfig({ relayers: { [chain.id]: … } })`:
+
+| Transport | Use |
 |---|---|
-| `RelayerWeb` | Browser apps and React apps |
-| `RelayerNode` | Node.js scripts, servers, jobs, workers |
-| `RelayerCleartext` | Local Hardhat, Hoodi-style demos, unsupported-chain testing |
+| `web()` | Browser apps and React apps |
+| `node()` | Node.js scripts, servers, jobs, workers |
+| `cleartext()` | Local Hardhat, Hoodi/InGen-style demos, unsupported-chain testing |
 
-Do not use `RelayerCleartext` as a production privacy backend.
+Do not use `cleartext()` as a production privacy backend.
 
-## Built-in signer rules
+## Config builder per stack
 
-| Stack | Signer |
-|---|---|
-| React + wagmi | `ViemSigner` |
-| Browser + viem | `ViemSigner` |
-| Browser + ethers | `EthersSigner({ ethereum: window.ethereum })` |
-| Node.js + viem | `ViemSigner({ walletClient, publicClient })` |
-| Node.js + ethers | `EthersSigner({ signer: wallet })` |
+You don't construct signers by hand — `createConfig` builds the signer and provider from your wallet clients:
 
-The browser and Node.js ethers cases are different. In browser code, `EthersSigner` takes the raw EIP-1193 provider. In Node.js, it takes an ethers signer instance.
+| Stack | Builder | What you pass |
+|---|---|---|
+| React + wagmi | `createConfig` (`@zama-fhe/react-sdk/wagmi`) | `wagmiConfig` |
+| Browser + viem | `createConfig` (`@zama-fhe/sdk/viem`) | `publicClient`, `walletClient`, `ethereum?` |
+| Browser + ethers | `createConfig` (`@zama-fhe/sdk/ethers`) | `ethereum` (raw EIP-1193 provider) |
+| Node.js + viem | `createConfig` (`@zama-fhe/sdk/viem`) | `publicClient`, `walletClient` |
+| Node.js + ethers | `createConfig` (`@zama-fhe/sdk/ethers`) | `signer` (ethers `Wallet` with provider) |
 
-Do not recommend `WagmiSigner` from `@zama-fhe/react-sdk/wagmi` until its upstream bundling issue is fixed. Use wagmi for UI/account state and build a `ViemSigner` after connect.
+The browser and Node.js ethers cases differ: in the browser pass `ethereum`; in Node pass `signer`.
 
-## `GenericSigner`
+The wagmi adapter (`createConfig` from `@zama-fhe/react-sdk/wagmi`) is the recommended React path — it derives the signer from the wagmi `Config` and subscribes to connection changes.
 
-Only implement `GenericSigner` when the built-in adapters do not fit the wallet provider. Typical cases:
+## `GenericSigner` / `GenericProvider`
 
-- embedded wallets
-- custom MPC signers
-- service-side signers
-- proprietary wallet SDKs
+Only implement these when the built-in adapters do not fit the wallet provider (embedded wallets, custom MPC signers, service-side signers, proprietary wallet SDKs). The base `createConfig` from `@zama-fhe/sdk` takes a pre-built `{ signer, provider }`.
 
-Required methods:
+`GenericSigner` (write/sign): `walletAccount` store, `requireWalletAccount()`, `signTypedData()`, `writeContract()`, optional `refreshWalletAccount()` / `dispose()`.
 
-- `getChainId()`
-- `getAddress()`
-- `signTypedData()`
-- `writeContract()`
-- `readContract()`
-- `waitForTransactionReceipt()`
-- optional `subscribe()` for account/chain/disconnect lifecycle events
+`GenericProvider` (read): `getChainId()`, `readContract()`, `waitForTransactionReceipt()`, `getBlockTimestamp()`.
 
-Prefer adapting the wallet at the signer boundary rather than rewriting SDK flows around it.
+Prefer adapting the wallet at the signer/provider boundary rather than rewriting SDK flows around it.
 
 ## Legacy integration migration
 
 If the codebase has old relayer helpers, app-local encrypt/decrypt wrappers, hardcoded wrapper addresses, or decrypt prompts triggered on render:
 
-- move runtime setup into one provider/bootstrap layer
-- prefer built-in signer adapters before implementing `GenericSigner`
-- replace ERC-7984 hand wiring with high-level token APIs
-- keep custom FHE contracts on the `encrypt` / `userDecrypt` path
-- replace implicit decrypt prompts with the explicit `useIsAllowed` / `useAllow` pattern
+- move runtime setup into one `createConfig` provider/bootstrap layer
+- prefer the built-in `createConfig` adapters before implementing `GenericSigner` / `GenericProvider`
+- replace ERC-7984 hand wiring with high-level token APIs (`createToken` / `createWrappedToken`)
+- keep custom FHE contracts on the `encrypt` / `decryptValues` path
+- replace implicit decrypt prompts with the explicit `useHasPermit` / `useGrantPermit` pattern
 - prefer registry or discovery helpers over hardcoded wrapper addresses
 
 ## Sub-path rule of thumb

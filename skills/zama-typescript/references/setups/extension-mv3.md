@@ -2,22 +2,27 @@
 
 **Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/web-extensions.md`
 
-The problem: MV3 service workers can be terminated after 30s idle. In-memory session state (wallet signature) is lost, forcing a re-sign on every interaction. Fix: pass **`chromeSessionStorage` as `sessionStorage`** (not as `storage`) — `chrome.storage.session` survives worker restarts.
+The problem: MV3 service workers can be terminated after 30s idle. In-memory permit state (the wallet-signed credential) is lost, forcing a re-sign on every interaction. Fix: pass **`chromeSessionStorage` as `permitStorage`** (keep it separate from `storage`) — `chrome.storage.session` survives worker restarts.
 
 ```ts
-import { ZamaSDK, RelayerWeb, SepoliaConfig, indexedDBStorage, chromeSessionStorage } from "@zama-fhe/sdk";
-import { ViemSigner } from "@zama-fhe/sdk/viem";
+import { ZamaSDK, indexedDBStorage, chromeSessionStorage } from "@zama-fhe/sdk";
+import { sepolia, type FheChain } from "@zama-fhe/sdk/chains";
+import { createConfig } from "@zama-fhe/sdk/viem";
+import { web } from "@zama-fhe/sdk/web";
 
-const sdk = new ZamaSDK({
-  relayer: new RelayerWeb({
-    getChainId: () => signer.getChainId(),
-    // Sepolia: spread SepoliaConfig as-is. Only override relayerUrl on mainnet.
-    transports: { [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC } },
+// Spread the `sepolia` chain preset as-is. Only override relayerUrl on mainnet.
+const zamaSepolia = { ...sepolia, network: RPC } as const satisfies FheChain;
+
+const sdk = new ZamaSDK(
+  createConfig({
+    chains: [zamaSepolia],
+    publicClient,                         // built from the extension's viem clients
+    walletClient,
+    storage: indexedDBStorage,            // encrypted FHE keypair — persistent
+    permitStorage: chromeSessionStorage,  // wallet-signed permit — survives worker restart
+    relayers: { [zamaSepolia.id]: web() },
   }),
-  signer,
-  storage: indexedDBStorage,          // encrypted FHE keypair — persistent
-  sessionStorage: chromeSessionStorage, // wallet signature — survives worker restart
-});
+);
 ```
 
-`manifest.json` needs `"permissions": ["storage"]`. Popup, background, and content scripts all share `chrome.storage.session` — sign once in the popup, background decrypts without another prompt. Browser close purges the session signature (indexedDB keypair survives).
+`storage` and `permitStorage` must be **separate** stores — sharing one instance corrupts the cached credentials. `manifest.json` needs `"permissions": ["storage"]`. Popup, background, and content scripts all share `chrome.storage.session` — sign once in the popup, background decrypts without another prompt. Browser close purges the session permit (indexedDB keypair survives).

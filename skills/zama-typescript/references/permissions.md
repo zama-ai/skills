@@ -1,47 +1,55 @@
-# SDK permissions and sessions
+# SDK permits and credentials
 
-Use this note for session signatures, decrypt authorization, delegation, and session teardown.
+Use this note for permit signatures, decrypt authorization, delegation, and credential teardown.
 
-Do not describe this as "credentials" unless quoting an existing API name. The user-facing concept is session authorization.
+The user-facing concept is a **permit**: a wallet signature that authorizes decrypt access for specific contracts. The SDK persists it as a **credential** in `storage` / `permitStorage`.
 
-## Session model in one sentence
+## Permit model in one sentence
 
-The SDK needs a wallet signature to authorize decrypt access for specific contracts; check it with `isAllowed` / `useIsAllowed`, request it with `allow` / `useAllow`, and avoid triggering it invisibly.
+The SDK needs a wallet signature to authorize decrypt access for specific contracts; check it with `hasPermit` / `useHasPermit`, request it with `grantPermit` / `useGrantPermit`, and avoid triggering it invisibly.
 
 ## Main APIs
 
-### Session authorization
+Core-SDK permit/decrypt/delegation operations are grouped under namespaces on the `ZamaSDK` instance: `sdk.permits`, `sdk.decryption`, `sdk.delegations`.
 
-- Core SDK: `allow`, `isAllowed`, `revoke`, `revokeSession`
-- React SDK: `useAllow`, `useIsAllowed`, `useRevoke`, `useRevokeSession`
+### Permits (decrypt authorization)
+
+- Core SDK: `sdk.permits.grantPermit(contracts)`, `sdk.permits.hasPermit(contracts)`, `sdk.permits.revokePermits(contracts?)`, `sdk.permits.clear()`
+- React SDK: `useGrantPermit`, `useHasPermit`, `useRevokePermits`, `useClearCredentials`
 
 Use this for user-owned decrypt flows such as balance reads or custom-contract outputs.
 
+### Decryption
+
+- Core SDK: `sdk.decryption.decryptValues`, `sdk.decryption.decryptPublicValues`, `sdk.decryption.delegatedDecryptValues`
+- React SDK: `useDecryptValues`, `useDecryptPublicValues`, `useDelegatedDecryptValues`
+
 ### Delegation
 
-- Core SDK: `delegateDecryption`, `revokeDelegation`, `delegationStatus`, `decryptBalanceAs`, `batchDecryptBalancesAs`
-- React hooks: `useDelegateDecryption`, `useRevokeDelegation`, `useDecryptBalanceAs`, `useDelegationStatus`
+- Core SDK: `sdk.delegations.delegateDecryption`, `sdk.delegations.revokeDelegation`, `sdk.delegations.isActive`, `sdk.delegations.getExpiry`
+- React hooks: `useDelegateDecryption`, `useRevokeDelegation`, `useDelegationStatus`, `useDecryptBalanceAs`, `useBatchDecryptBalancesAs`
 
 Use delegation when another address or service needs permission to decrypt on behalf of a user.
 
 ## Practical rules
 
-- Check permission before a decrypting read.
-- If missing, show an explicit button and call `allow`.
+- Check the permit before a decrypting read.
+- If missing, show an explicit button and call `grantPermit`.
 - Pass query `enabled` flags so decrypting queries do not prompt on render.
-- Signer lifecycle subscriptions can revoke sessions on disconnect or account change, so manual teardown is not always necessary.
-- Use `useRevokeSession` for sign-out/security-reset flows, not after every operation.
+- Signer lifecycle subscriptions can clear credentials on disconnect or account change, so manual teardown is not always necessary.
+- Use `useClearCredentials` for sign-out/security-reset flows, not after every operation.
 
 ## TTL rules
 
-- `sessionTTL` controls how long the wallet signature remains valid.
+- `permitTTL` (days, default 30) controls how long the permit signature remains valid; it is clamped to `transportKeyPairTTL / 86400`.
+- `transportKeyPairTTL` (seconds, default 30 days) controls the ML-KEM transport key pair lifetime.
 - Short TTLs produce more prompts but reduce exposure.
-- Long or infinite TTLs improve UX but should be a conscious product decision.
+- Long TTLs improve UX but should be a conscious product decision.
 - Do not simulate short TTLs by revoking after every balance read; that creates bad UX and repeated wallet prompts.
 
 ## Scope rules
 
-- Scope permissions to the exact contract addresses needed.
+- Scope permits to the exact contract addresses needed.
 - For custom FHE contracts, the decrypt handle's `contractAddress` must match the producing contract.
 - For token flows, pair this note with `tokens.md` because wrapper/token addresses matter.
 

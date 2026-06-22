@@ -7,28 +7,37 @@ alwaysApply: false
 
 _Reference for zama-typescript skill (zama-protocol plugin)_
 
-# Localhost - Cleartext setup
+# Localhost — Cleartext setup
 
 **Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/local-development.md`
 
-For local nodes and custom testnets deployed in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. Drop-in replacement for `RelayerWeb`/`RelayerNode`; the rest of your code is unchanged.
+For local nodes and custom testnets running in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. The only change vs. a real deployment is the relayer transport: swap `web()` / `node()` for **`cleartext()`**. The rest of your code is unchanged.
 
 Blocked on Ethereum Mainnet and Sepolia — dev/test only.
 
 ```ts
-import { ZamaSDK, memoryStorage } from "@zama-fhe/sdk";
-import { RelayerCleartext, hardhatCleartextConfig } from "@zama-fhe/sdk/cleartext";
-import { ViemSigner } from "@zama-fhe/sdk/viem";
+import { ZamaSDK, MemoryStorage, cleartext } from "@zama-fhe/sdk";
+import { hardhat, type FheChain } from "@zama-fhe/sdk/chains";
+import { createConfig } from "@zama-fhe/sdk/ethers";
+import { JsonRpcProvider, Wallet } from "ethers";
 
-const relayer = new RelayerCleartext(hardhatCleartextConfig);
-// Or for the Hoodi cleartext testnet:
-// import { hoodiCleartextConfig } from "@zama-fhe/sdk/cleartext";
-// const relayer = new RelayerCleartext(hoodiCleartextConfig);
+const wallet = new Wallet(PRIVATE_KEY, new JsonRpcProvider("http://127.0.0.1:8545"));
+const localChain = { ...hardhat, network: "http://127.0.0.1:8545" } as const satisfies FheChain;
 
-const sdk = new ZamaSDK({ relayer, signer, storage: memoryStorage });
+const sdk = new ZamaSDK(
+  createConfig({
+    chains: [localChain],
+    signer: wallet,
+    storage: new MemoryStorage(),
+    relayers: { [localChain.id]: cleartext() }, // ← cleartext transport, no relayer/KMS network
+  }),
+);
 
-const token = sdk.createToken("0xYourToken");
-await token.shield(1000n);
+const wrapped = sdk.createWrappedToken("0xYourWrapper");
+await wrapped.shield(1000n);
 ```
 
-Example implementation of cleartext setup is in https://github.com/zama-ai/fhevm-react-template
+For the hosted cleartext testnets, use the built-in chain presets instead of `hardhat`:
+`hoodi`, `ingenTestnet`, and `bscTestnet` from `@zama-fhe/sdk/chains` (each already carries its `registryAddress`). The `cleartext` factory is also re-exported from `@zama-fhe/sdk/node`.
+
+Runnable cleartext examples live in the SDK repo: `examples/example-ingen` and `examples/example-hoodi`.

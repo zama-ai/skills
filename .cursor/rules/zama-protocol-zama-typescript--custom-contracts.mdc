@@ -17,19 +17,18 @@ Do not use the token helpers as the default answer for these cases.
 
 For custom contracts in browser or React apps:
 
-- use `useEncrypt` to produce encrypted handles and `inputProof`
-- convert handles and proof to ABI-friendly hex values
+- use `useEncrypt` to produce `encryptedValues` and `inputProof` (already ABI-ready hex)
 - submit them to the contract call
 - read the returned encrypted handles
-- use `useUserDecrypt` to decrypt the final result
+- use `useDecryptValues` to decrypt the final result
 
 Typical pattern:
 
 1. collect plaintext user input
 2. call `useEncrypt`
-3. send `handles` + `inputProof` to the contract
+3. send `encryptedValues` + `inputProof` to the contract
 4. read the encrypted handle back from the contract
-5. gate `useUserDecrypt` behind `useIsAllowed`
+5. gate `useDecryptValues` behind `useHasPermit`
 
 ## Non-React path
 
@@ -42,8 +41,8 @@ For non-React TypeScript integrations:
 ## Rules that matter most
 
 - The target `contractAddress` used during encryption must match the contract that consumes the input.
-- `encrypt()` returns `Uint8Array` handles and proof; convert them with viem `bytesToHex` or ethers `hexlify` before passing them to contract calls.
-- Gate decrypt operations behind the session-authorization checks instead of surprising the user with a wallet popup.
+- `encrypt()` returns `{ encryptedValues, inputProof }` already as `0x` hex (`encryptedValues` are `bytes32`, `inputProof` is `bytes`) — pass them straight to contract calls. Do **not** run them through `bytesToHex` / `hexlify`.
+- Gate decrypt operations behind a permit check (`hasPermit` / `useHasPermit`) instead of surprising the user with a wallet popup.
 - Keep token guidance and custom-contract guidance separate. ERC-7984 helpers are not the generic answer here.
 
 ## Related

@@ -20,30 +20,38 @@ There are two token addresses in wrapper flows:
 - underlying ERC20 token
 - confidential ERC-7984 wrapper token
 
-Do not hardcode this mapping unless the app owns deployment. Prefer wrapper discovery or registry helpers when available.
+Do not hardcode this mapping unless the app owns deployment. Prefer wrapper discovery or registry helpers when available (`sdk.registry.getConfidentialToken(erc20)`).
+
+## Token vs WrappedToken
+
+Two core-SDK factories:
+
+- `sdk.createToken(address)` → `Token` — balance, `confidentialTransfer`, operators, decryption.
+- `sdk.createWrappedToken(address)` → `WrappedToken` (extends `Token`) — adds `shield`, `unshield`, `unshieldAll`, `approveUnderlying`, `allowance`, `unwrap*`, `finalizeUnwrap`.
+
+Use `createWrappedToken` whenever you shield/unshield; `createToken` is enough for read/transfer.
 
 ## Core token operations
 
 ### 1. Shield
 
-Shielding moves public ERC20 into confidential ERC-7984 balance.
+Shielding moves public ERC20 into confidential ERC-7984 balance. `WrappedToken.shield` (or `useShield`) handles the routing — it detects ERC-1363 support and routes through `transferAndCall` (one tx) or `approve` + `wrap` (two txs) automatically. Don't compose the approve/wrap calls by hand.
 
 Typical sequence:
 
-1. approve the wrapper to spend underlying ERC20
-2. call SDK token `.shield(...)` or React `useShield`
-3. wait for the transaction
-4. read confidential balance only after session authorization
+1. call `sdk.createWrappedToken(wrapper).shield(amount)` or React `useShield`
+2. wait for the transaction
+3. read confidential balance only after a decrypt permit is granted
 
 ### 2. Read confidential balance
 
-This is a decrypting read, so session authorization matters. Pair it with `permissions.md` or `react.md`.
+This is a decrypting read, so a permit matters. Pair it with `permissions.md` or `react.md`.
 
 React pattern:
 
-- `useIsAllowed({ contractAddresses: [tokenAddress] })`
-- if false, show an unlock button using `useAllow`
-- pass `{ enabled: !!allowed }` to `useConfidentialBalance`
+- `useHasPermit({ contractAddresses: [tokenAddress] })`
+- if false, show an unlock button using `useGrantPermit`
+- pass `{ enabled: !!hasPermit }` to `useConfidentialBalance({ address: tokenAddress, account })`
 
 ### 3. Confidential transfer
 
@@ -67,21 +75,29 @@ React apps must handle interrupted flows; see `react.md` for pending-unshield pe
 
 Use:
 
-- `useResumeUnshield({ tokenAddress })`
-- `savePendingUnshield`
-- `loadPendingUnshield`
-- `clearPendingUnshield`
+- `useResumeUnshield(wrapperAddress)` — the wrapper address is a positional argument
+- `savePendingUnshield(storage, wrapperAddress, unwrapTxHash)`
+- `loadPendingUnshield(storage, wrapperAddress)`
+- `clearPendingUnshield(storage, wrapperAddress)`
 
-Persist the unwrap tx hash when phase 1 is submitted. Do not assume the browser stays open until finalize.
+Persist the unwrap tx hash when phase 1 is submitted (the robust trigger is `onEvent` watching `ZamaSDKEvents.UnshieldPhase1Submitted`). Do not assume the browser stays open until finalize.
+
+## Operators (not approvals)
+
+ERC-7984 authorizes third-party transfers with an **operator** model — there is no ERC20-style `approve` / `allowance` / `isApproved` on the confidential token. An operator may move the holder's confidential balance until an optional expiry.
+
+- `token.setOperator(operator, until?)` — `until` is a Unix-seconds expiry; omit for none.
+- `token.isOperator(holder, spender)` — **holder first**, then the operator address. Easy to reverse.
+- React: `useConfidentialSetOperator(tokenAddress)` (positional) and `useConfidentialIsOperator({ address, holder, spender })`.
+
+Do not confuse this with `approveUnderlying` / `useApproveUnderlying` — that is the ERC20 approval on the *underlying* token ahead of a shield, not a confidential-token operator.
 
 ## Delegation on token flows
 
 Use delegated decrypt when a portfolio view, backend, or authorized third party needs to decrypt balances for a user:
 
-- `delegateDecryption`
-- `delegationStatus`
-- `decryptBalanceAs`
-- `batchDecryptBalancesAs`
+- Core SDK: `sdk.delegations.delegateDecryption`, `sdk.delegations.revokeDelegation`, `sdk.delegations.isActive`, `sdk.delegations.getExpiry`; `Token.decryptBalanceAs` / `Token.batchDecryptBalancesAs`
+- React hooks: `useDelegateDecryption`, `useDelegationStatus`, `useDecryptBalanceAs`, `useBatchDecryptBalancesAs`
 
 Keep this separate from operator approvals. Operator approvals let someone transfer; decrypt delegation lets someone read.
 
@@ -90,7 +106,7 @@ Keep this separate from operator approvals. Operator approvals let someone trans
 - Do not reimplement ERC-7984 encrypted balance logic in app contracts.
 - Do not treat wrapper and underlying token addresses as interchangeable.
 - Do not trigger wallet decrypt signatures on render.
-- Do not revoke the whole session after every balance read.
+- Do not clear credentials after every balance read.
 - Do not use token hooks for custom FHE contracts.
 
 ## Related

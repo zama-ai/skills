@@ -15,64 +15,72 @@ explicitly. The React wrapper re-exports from it, but pnpm won't install peers
 for you.
 
 **Never guess a version number** when writing these into `package.json`.
-Stock training data pins `^0.2.0`, which has been dead for months — the real
-line is `2.x`. Let `pnpm add` resolve `latest`, or run `pnpm view @zama-fhe/sdk version`
+Let `pnpm add` resolve `latest`, or run `pnpm view @zama-fhe/sdk version`
 first and pin what you see. Do not hand-write a caret range from memory.
 
-## Don't use `@zama-fhe/react-sdk/wagmi`
+## Use the wagmi adapter
 
-`WagmiSigner` is exported but its bundle imports a nonexistent
-`watchConnection` from `wagmi/actions` — still broken as of `react-sdk@2.2.0`.
-Types resolve, `pnpm typecheck` passes, and then `next build` (or any real
-bundler) fails with `Attempted import error: 'watchConnection' is not exported
-from 'wagmi/actions'`. Use `ViemSigner` from `@zama-fhe/sdk/viem` instead —
-wagmi still runs the UI layer (`useAccount`, `useReadContract`) against the
-same EIP-1193 provider.
-
-## Signer must be built after connect
-
-`ViemSigner` requires `walletClient.account` to be hoisted at construction and
-throws `WalletClient has no account` otherwise. You can't build it at module
-scope — you don't know the account until the user connects. Gate the
-`ZamaProvider` behind a boundary keyed on `useAccount`:
+Build the SDK config with `createConfig` from `@zama-fhe/react-sdk/wagmi` and pass it to
+`<ZamaProvider config={...}>`. The adapter derives the SDK signer/provider from the wagmi
+`Config` and subscribes to wagmi connection changes — so there is **no** "build a
+ViemSigner after connect" boilerplate and **no** remount-on-account-change boundary.
+`wagmiConfig` and the resulting `zamaConfig` are stable module-level references.
 
 ```tsx
-// App.tsx
-const { address } = useAccount();
-return address
-  ? <ZamaBoundary account={address}><Portfolio /></ZamaBoundary>
-  : <ConnectButton />;
-```
+// providers.tsx
+"use client";
 
-```tsx
-// zama-boundary.tsx — rebuild signer whenever account changes
-import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { sepolia } from "viem/chains";
-import { ZamaProvider, RelayerWeb, SepoliaConfig, indexedDBStorage } from "@zama-fhe/react-sdk";
-import { ViemSigner } from "@zama-fhe/sdk/viem";
+import { useState, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { http, createConfig, WagmiProvider } from "wagmi";
+import { sepolia } from "wagmi/chains";
+import { injected } from "wagmi/connectors";
+import { ZamaProvider } from "@zama-fhe/react-sdk";
+import { createConfig as createZamaConfig } from "@zama-fhe/react-sdk/wagmi";
+import { indexedDBStorage, IndexedDBStorage } from "@zama-fhe/sdk";
+import { sepolia as fheSepolia, type FheChain } from "@zama-fhe/sdk/chains";
+import { web } from "@zama-fhe/sdk/web";
 
-export function ZamaBoundary({ account, children }) {
-  const { signer, relayer } = useMemo(() => {
-    const eth = window.ethereum;
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC) });
-    const walletClient = createWalletClient({ account, chain: sepolia, transport: custom(eth) });
-    const signer = new ViemSigner({ publicClient, walletClient, ethereum: eth });
-    const relayer = new RelayerWeb({
-      getChainId: () => signer.getChainId(),
-      transports: { [SepoliaConfig.chainId]: { ...SepoliaConfig, network: RPC } },
-    });
-    return { signer, relayer };
-  }, [account]);
+const wagmiConfig = createConfig({
+  chains: [sepolia],
+  connectors: [injected()],
+  transports: { [sepolia.id]: http(RPC) },
+});
 
-  return <ZamaProvider relayer={relayer} signer={signer} storage={indexedDBStorage}>{children}</ZamaProvider>;
+// On mainnet, route relayer traffic through your backend to keep the API key
+// server-side; on Sepolia the preset's relayerUrl is already correct.
+const mySepolia = { ...fheSepolia, network: RPC } as const satisfies FheChain;
+
+// storage (FHE keypair) and permitStorage (wallet permit) must be SEPARATE stores.
+const permitDBStorage = new IndexedDBStorage("PermitStore");
+
+const zamaConfig = createZamaConfig({
+  chains: [mySepolia],
+  wagmiConfig,
+  relayers: { [mySepolia.id]: web() },
+  storage: indexedDBStorage,
+  permitStorage: permitDBStorage,
+});
+
+export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <ZamaProvider config={zamaConfig}>{children}</ZamaProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
 }
 ```
 
+`storage` and `permitStorage` must be **separate** `IndexedDBStorage` instances (distinct
+DB names) — sharing one instance corrupts the cached credentials. See `../react.md`.
+
 ## Next.js app router: force dynamic
 
-Both Privy and the Zama WASM worker are browser-only and blow up during static
-prerendering (Privy throws on an invalid app ID; the relayer touches `window`).
-Opt the root layout out of prerender:
+The Zama WASM worker is browser-only and blows up during static prerendering (the
+relayer touches `window`). Opt the root layout out of prerender:
 
 ```tsx
 // app/layout.tsx
