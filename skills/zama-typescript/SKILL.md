@@ -77,6 +77,7 @@ These supplement the universal gotchas in the zama-protocol skill.
 
 ## Canonical sources
 
+- **Agent discovery index (`llms.txt`):** https://raw.githubusercontent.com/zama-ai/sdk/main/llms.txt — curated link index of the SDK docs (usable without cloning the repo). Fetch this first to find the right page, then follow the raw-GitHub link. Full concatenated text (large; fallback only): https://raw.githubusercontent.com/zama-ai/sdk/main/llms-full.txt
 - **`@zama-fhe/sdk` hosted docs (authoritative):** https://docs.zama.org/protocol/sdk
 - **`@zama-fhe/sdk` repo (source + examples + changelog):** https://github.com/zama-ai/sdk
 - **`@zama-fhe/sdk` examples:** https://github.com/zama-ai/sdk/tree/main/examples/
