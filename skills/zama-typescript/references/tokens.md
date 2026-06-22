@@ -73,6 +73,16 @@ Use:
 
 Persist the unwrap tx hash when phase 1 is submitted (the robust trigger is `onEvent` watching `ZamaSDKEvents.UnshieldPhase1Submitted`). Do not assume the browser stays open until finalize.
 
+## Operators (not approvals)
+
+ERC-7984 authorizes third-party transfers with an **operator** model — there is no ERC20-style `approve` / `allowance` / `isApproved` on the confidential token. An operator may move the holder's confidential balance until an optional expiry.
+
+- `token.setOperator(operator, until?)` — `until` is a Unix-seconds expiry; omit for none.
+- `token.isOperator(holder, spender)` — **holder first**, then the operator address. Easy to reverse.
+- React: `useConfidentialSetOperator(tokenAddress)` (positional) and `useConfidentialIsOperator({ address, holder, spender })`.
+
+Do not confuse this with `approveUnderlying` / `useApproveUnderlying` — that is the ERC20 approval on the *underlying* token ahead of a shield, not a confidential-token operator.
+
 ## Delegation on token flows
 
 Use delegated decrypt when a portfolio view, backend, or authorized third party needs to decrypt balances for a user:
