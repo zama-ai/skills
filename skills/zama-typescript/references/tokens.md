@@ -24,7 +24,7 @@ Use `createWrappedToken` whenever you shield/unshield; `createToken` is enough f
 
 ## Core token operations
 
-Write methods (`shield`, `unshield`, `confidentialTransfer`, `setOperator`, …) resolve to a `TransactionResult` — read `.txHash` (a `Hex`) and `.receipt` (the mined receipt), **not** `.hash`. `shield` additionally reports `.shieldPath` (`transferAndCall` vs `approveAndWrap`) so you can tell which route the SDK took.
+Write methods (`shield`, `unshield`, `confidentialTransfer`, `setOperator`, …) resolve to a `TransactionResult` — read `.txHash` (a `Hex`) and `.receipt` (the mined receipt), **not** `.hash`. The route `shield` took (`transferAndCall` vs `approveAndWrap`) is not on the return value; it is reported as `shieldPath` on the `ShieldSubmitted` event via the `onEvent` callback.
 
 ### 1. Shield
 
@@ -40,7 +40,7 @@ Typical sequence:
 
 This is a decrypting read, so a permit matters. Pair it with `permissions.md` or `react.md`.
 
-Your own balance needs only your own permit. Reading **another** account's balance (`token.balanceOf(otherAddress)`) returns clear-text only if that account granted you a decrypt delegation — otherwise use `Token.decryptBalanceAs` after a delegation (see *Delegation on token flows* below).
+`token.balanceOf(owner)` decrypts via **your own** permit — it is the read-your-own-balance path. To read **another** account's balance, that account must first grant you a decrypt delegation; you then call `Token.decryptBalanceAs({ delegatorAddress })` (see *Delegation on token flows* below).
 
 React pattern:
 
