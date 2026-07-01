@@ -2,8 +2,8 @@
 
 **Canonical docs:**
 
-- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (React + wagmi tab)
-- `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/reference/react/ZamaProvider.md`
+- `https://docs.zama.org/protocol/sdk/getting-started/quick-start.md` (React + wagmi tab)
+- `https://docs.zama.org/protocol/sdk/api-references/react/zamaprovider.md`
 
 ```bash
 pnpm add @zama-fhe/react-sdk @zama-fhe/sdk \

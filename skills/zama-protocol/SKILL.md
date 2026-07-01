@@ -46,7 +46,7 @@ These are the LLM blind spots that ship as bugs in stock-model output. Keep them
 
 ## Canonical sources
 
-- **Zama Docs:** https://docs.zama.ai
+- **Zama Docs:** https://docs.zama.org
 - **Protocol changelog (authoritative — current running version):** https://docs.zama.org/protocol/changelog
 - **Protocol addresses:** https://docs.zama.org/protocol/protocol-apps/addresses
 - **FHEVM Solidity library:** https://github.com/zama-ai/fhevm

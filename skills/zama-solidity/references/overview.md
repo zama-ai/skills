@@ -36,7 +36,7 @@ For any confidential token (encrypted ERC20, private-balance token, FHE token), 
 ## Sources
 
 - **HCU costs:** https://github.com/zama-ai/fhevm/blob/main/docs/solidity-guides/hcu.md
-- **Zama Docs:** https://docs.zama.ai
+- **Zama Docs:** https://docs.zama.org
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
 - **Zama dApps (examples):** https://github.com/zama-ai/dapps/tree/main/packages/hardhat/contracts
 - **Protocol Apps (deployed):** https://github.com/zama-ai/protocol-apps/tree/main/contracts

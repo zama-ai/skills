@@ -9,7 +9,7 @@ _Reference for zama-typescript skill (zama-protocol plugin)_
 
 # Localhost — Cleartext setup
 
-**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/local-development.md`
+**Canonical doc:** `https://docs.zama.org/protocol/sdk/guides/local-development.md`
 
 For local nodes and custom testnets running in **cleartext mode** — values are stored as plaintext on-chain, no KMS, no gateway, no WASM. The only change vs. a real deployment is the relayer transport: swap `web()` / `node()` for **`cleartext()`**. The rest of your code is unchanged.
 

@@ -9,7 +9,7 @@ _Reference for zama-typescript skill (zama-protocol plugin)_
 
 # Node.js backend setup
 
-**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/guides/node-js-backend.md`
+**Canonical doc:** `https://docs.zama.org/protocol/sdk/guides/node-js-backend.md`
 
 Also the pattern for **React Native / mobile**: expose `/encrypt` and `/decrypt` HTTP endpoints and forward from the app.
 

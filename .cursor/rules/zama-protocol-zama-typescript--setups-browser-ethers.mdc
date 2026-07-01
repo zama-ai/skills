@@ -9,7 +9,7 @@ _Reference for zama-typescript skill (zama-protocol plugin)_
 
 # Browser + ethers setup
 
-**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (ethers tab)
+**Canonical doc:** `https://docs.zama.org/protocol/sdk/getting-started/quick-start.md` (ethers tab)
 
 ```bash
 pnpm add @zama-fhe/sdk ethers

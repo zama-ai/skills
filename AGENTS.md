@@ -84,14 +84,14 @@ skills-repo/                         ← this repo (zama-ai/skills)
 
 ### Before adding content
 
-1. Check official docs: https://docs.zama.ai
+1. Check official docs: https://docs.zama.org
 2. Verify the API against the latest packages.
 3. Test with a stock LLM — does it actually get this wrong?
 4. If the LLM already knows it AND humans don't need it explained, don't add it.
 
 ## References
 
-- **Zama Docs:** https://docs.zama.ai
+- **Zama Docs:** https://docs.zama.org
 - **Protocol addresses:** https://docs.zama.org/protocol/protocol-apps/addresses
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
 - **SDK:** https://github.com/zama-ai/sdk

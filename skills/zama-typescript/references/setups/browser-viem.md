@@ -1,6 +1,6 @@
 # Browser + viem setup
 
-**Canonical doc:** `https://github.com/zama-ai/sdk/tree/main/docs/gitbook/src/tutorials/quick-start.md` (viem tab)
+**Canonical doc:** `https://docs.zama.org/protocol/sdk/getting-started/quick-start.md` (viem tab)
 
 ```bash
 pnpm add @zama-fhe/sdk viem

@@ -190,7 +190,7 @@ Deeper protocol design notes bundled with this skill:
 
 ## Resources
 
-- **Zama Protocol Docs:** https://docs.zama.ai
+- **Zama Protocol Docs:** https://docs.zama.org
 - **Protocol changelog (current running version):** https://docs.zama.org/protocol/changelog
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
 - **Forge FHEVM:** https://github.com/zama-ai/forge-fhevm

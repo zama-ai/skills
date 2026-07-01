@@ -2,7 +2,7 @@
 
 The missing knowledge between AI agents and production encrypted smart contracts.
 
-Built on [Zama's FHEVM](https://docs.zama.ai/protocol) — Fully Homomorphic Encryption on EVM-compatible blockchains.
+Built on [Zama's FHEVM](https://docs.zama.org/protocol) — Fully Homomorphic Encryption on EVM-compatible blockchains.
 
 ## What is this?
 
