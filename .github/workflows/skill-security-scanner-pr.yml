@@ -1,66 +1,63 @@
 name: skill-security-scanner-pr
 
-# Scans Claude skills in this repository on every pull request targeting main.
+# Scans Claude skills in this repository on every pull request.
 # Fails the PR if high-severity findings are detected.
 #
 # Deploy this workflow by copying it to .github/workflows/ in the marketplace/skill repo.
 #
-# Scan modes:
-#   simple   — static + behavioral analyzers only; no API keys required; fast.
-#   advanced — superset of simple, adds LLM analysis and VirusTotal file scanning;
-#              requires CLAUDE_CODE_OAUTH_TOKEN and VIRUSTOTAL_API_KEY secrets.
+# Scan tiers:
+#   simple      — static + behavioral analyzers only; no API keys; for workflow testing.
+#   advanced-1  — Haiku + VirusTotal; low cost (~$0.05/run); default for feature branch PRs.
+#   advanced-2  — Opus 4.6 + VirusTotal; best quality (~$1.50/run); for PRs merging into main.
+#
+# Auto-selection (pull_request trigger):
+#   PR → main         → advanced-2  (Opus 4.6, ANTHROPIC_API_KEY)
+#   PR → other branch → advanced-1  (Haiku, CLAUDE_CODE_OAUTH_TOKEN)
+#
+# Manual override (workflow_dispatch): choose any tier; default advanced-1.
 #
 # Security model:
 #   - Scans the checked-out PR contents; no external repo cloning needed
 #   - Minimal permissions: contents:read only
 #
 # Secrets:
-#   - CLAUDE_CODE_OAUTH_TOKEN (required for advanced mode): Anthropic API key, passed as
-#     SKILL_SCANNER_LLM_API_KEY to the scanner for LLM-based analysis.
-#   - VIRUSTOTAL_API_KEY (required for advanced mode): VirusTotal API key for binary file scanning.
+#   - CLAUDE_CODE_OAUTH_TOKEN (advanced-1): Anthropic API key for Haiku LLM analysis.
+#   - ANTHROPIC_API_KEY (advanced-2): direct Anthropic API key (sk-ant-…) for Opus 4.6.
+#     Required for advanced-2 — Opus hits rate limits with OAuth tokens under parallel scans.
+#   - VIRUSTOTAL_API_KEY (advanced-1 and advanced-2): VirusTotal API key for binary file scanning.
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - 'skills/**'
   workflow_dispatch:
     inputs:
-      scan_mode:
+      scan_tier:
         description: >
-          simple — static/behavioral only (fast, no API keys),
-          advanced — adds LLM + VirusTotal (slow, over 11 mins).
+          simple — static/behavioral only (no API keys, for workflow testing).
+          advanced-1 — Haiku + VirusTotal (~$0.05/run, default, feature branch PRs).
+          advanced-2 — Opus 4.6 + VirusTotal (~$1.50/run, PRs merging into main).
         type: choice
         options:
-          - advanced
+          - advanced-1
           - simple
+          - advanced-2
         required: false
-        default: 'advanced'
-      llm_model:
-        description: >
-          LiteLLM model string (advanced mode only).
-          anthropic/claude-haiku-4-5-20251001 (default, highest rate limits),
-          anthropic/claude-opus-4-6 (best quality, lowest rate limits).
-        required: false
-        default: 'anthropic/claude-haiku-4-5-20251001'
+        default: 'advanced-1'
 
 permissions: {}
 
 concurrency:
   group: skill-security-scanner-pr-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: true  # Cancel superseded runs when a new commit is pushed to the PR
+  cancel-in-progress: true # Cancel superseded runs when a new commit is pushed to the PR
 
 jobs:
   scan-skills:
-    name: scan-skills-${{ inputs.scan_mode || 'advanced' }}
+    name: scan-skills-${{ github.event_name == 'pull_request' && (github.base_ref == 'main' && 'advanced-2' || 'advanced-1') || inputs.scan_tier || 'advanced-1' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read # Checkout repository
-    env:
-      SKILL_SCANNER_LLM_MODEL: ${{ inputs.llm_model || 'anthropic/claude-haiku-4-5-20251001' }}
-
     steps:
 
       # ── Phase 1: Setup ────────────────────────────────────────────────
@@ -71,13 +68,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 1
-
       - name: Install uv
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: "0.6.14"
+          version: 0.6.14
           enable-cache: false
-
       - name: Install skill-scanner
         run: |
           set -euo pipefail
@@ -93,14 +88,55 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/scan-results
 
-          # Build extra flags based on scan mode
-          EXTRA_FLAGS=""
-          if [ "$SCAN_MODE" = "advanced" ]; then
-            EXTRA_FLAGS="--use-llm --use-virustotal"
-            echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced: LLM + VirusTotal) ..."
+          # Determine effective tier:
+          #   pull_request → main         = advanced-2 (Opus 4.6, best quality)
+          #   pull_request → other branch = advanced-1 (Haiku, low cost)
+          #   workflow_dispatch           = inputs.scan_tier (default: advanced-1)
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            TIER="$( [ "$BASE_REF" = "main" ] && echo "advanced-2" || echo "advanced-1" )"
           else
-            echo "Scanning repository skills in $GITHUB_WORKSPACE (simple: static + behavioral) ..."
+            TIER="${INPUT_SCAN_TIER:-advanced-1}"
           fi
+          echo "Effective scan tier: $TIER"
+          echo "effective_tier=$TIER" >> "$GITHUB_OUTPUT"
+
+          # Map tier to scanner config; export LLM vars so the scanner subprocess picks them up.
+          EXTRA_FLAGS=""
+          case "$TIER" in
+            simple)
+              echo "Scanning repository skills in $GITHUB_WORKSPACE (simple: static + behavioral) ..."
+              ;;
+            advanced-1)
+              if [ -z "$SECRET_CLAUDE_OAUTH" ]; then
+                echo "::error::Tier advanced-1 requires the CLAUDE_CODE_OAUTH_TOKEN secret, but it is empty or unset. You can use the 'simple' tier (no API key needed)."
+                exit 1
+              fi
+              case "$SECRET_CLAUDE_OAUTH" in
+                sk-ant-oat*) : ;;
+                *) echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not have the expected 'sk-ant-oat' prefix — check the secret value."; exit 1 ;;
+              esac
+              export SKILL_SCANNER_LLM_MODEL="anthropic/claude-haiku-4-5-20251001"
+              export SKILL_SCANNER_LLM_API_KEY="$SECRET_CLAUDE_OAUTH"
+              export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
+              EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 2 --enable-meta"
+              echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced-1: Haiku + VirusTotal) ..."
+              ;;
+            advanced-2)
+              if [ -z "$SECRET_ANTHROPIC_API_KEY" ]; then
+                echo "::error::Tier advanced-2 requires the ANTHROPIC_API_KEY secret, but it is empty or unset. Opus needs a direct API key — an OAuth token hits rate limits under parallel scans."
+                exit 1
+              fi
+              case "$SECRET_ANTHROPIC_API_KEY" in
+                sk-ant-api*) : ;;
+                *) echo "::error::ANTHROPIC_API_KEY does not look like a valid Anthropic API key (expected 'sk-ant-api' prefix). advanced-2 needs a direct API key, not an OAuth token."; exit 1 ;;
+              esac
+              export SKILL_SCANNER_LLM_MODEL="anthropic/claude-opus-4-6"
+              export SKILL_SCANNER_LLM_API_KEY="$SECRET_ANTHROPIC_API_KEY"
+              export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
+              EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 1 --enable-meta"
+              echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced-2: Opus 4.6 + VirusTotal) ..."
+              ;;
+          esac
 
           set +e
 
@@ -140,10 +176,12 @@ jobs:
             echo "scan_status=findings" >> "$GITHUB_OUTPUT"
           fi
         env:
-          SCAN_MODE: ${{ inputs.scan_mode || 'advanced' }}
-          # Gate secrets on advanced mode: only pass them when scan mode is not explicitly 'simple'.
-          SKILL_SCANNER_LLM_API_KEY: ${{ inputs.scan_mode != 'simple' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
-          VIRUSTOTAL_API_KEY: ${{ inputs.scan_mode != 'simple' && secrets.VIRUSTOTAL_API_KEY || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          INPUT_SCAN_TIER: ${{ inputs.scan_tier || 'advanced-1' }}
+          SECRET_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          SECRET_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SECRET_VIRUSTOTAL: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       # ── Phase 3: Results ──────────────────────────────────────────────
       # Annotation runs first so that results.json contains GitHub URLs when the
@@ -163,18 +201,19 @@ jobs:
         if: always()
         env:
           REPO_URL: https://github.com/${{ github.repository }}
-          SCAN_MODE: ${{ inputs.scan_mode || 'advanced' }}
+          SCAN_MODE: ${{ steps.scan.outputs.effective_tier || 'advanced-1' }}
           RUN_ID: ${{ github.run_id }}
           REPO: ${{ github.repository }}
           SCANNED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 scripts/skill_scan_summary.py
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: uv run scripts/skill_scan_summary.py
 
       - name: Upload scan artifact
         if: always()
         #   gh api repos/actions/upload-artifact/git/refs/tags/v7 --jq '.object.sha'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: skill-scan-${{ inputs.scan_mode || 'advanced' }}-results-${{ github.run_id }}
+          name: skill-scan-${{ steps.scan.outputs.effective_tier || 'advanced-1' }}-results-${{ github.run_id }}
           path: /tmp/scan-results/
           retention-days: 30
 
@@ -182,8 +221,8 @@ jobs:
         if: steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error'
         run: |
           if [ "${{ steps.scan.outputs.scan_status }}" = "error" ]; then
-            echo "::error::Skill scanner (${{ inputs.scan_mode || 'advanced' }}) crashed or produced no output (exit ${{ steps.scan.outputs.scan_exit }}). Failing closed."
+            echo "::error::Skill scanner (${{ steps.scan.outputs.effective_tier }}) crashed or produced no output (exit ${{ steps.scan.outputs.scan_exit }}). Failing closed."
           else
-            echo "::error::Skill scanner (${{ inputs.scan_mode || 'advanced' }}) found high-severity issues. Review the job summary and the uploaded JSON artifact."
+            echo "::error::Skill scanner (${{ steps.scan.outputs.effective_tier }}) found high-severity issues. Review the job summary and the uploaded JSON artifact."
           fi
           exit 1
