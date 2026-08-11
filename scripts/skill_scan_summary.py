@@ -8,10 +8,11 @@ All configuration is read from environment variables set by the workflow.
 Environment variables:
   GITHUB_STEP_SUMMARY  — path to the step summary file (set by GH Actions)
   REPO_URL             — e.g. https://github.com/org/repo
-  SCAN_MODE            — "advanced" or "simple"
+  SCAN_MODE            — scan tier: "simple", "advanced-1", or "advanced-2"
   RUN_ID               — GitHub Actions run ID
   REPO                 — e.g. org/repo
   SCANNED_SHA          — the exact commit SHA that was checked out and scanned
+  BRANCH               — the branch that was scanned (PR source branch)
 """
 
 import json
@@ -26,6 +27,7 @@ SCAN_MODE   = os.environ.get("SCAN_MODE", "advanced")
 RUN_ID      = os.environ.get("RUN_ID", "")
 REPO        = os.environ.get("REPO", "")
 SCANNED_SHA = os.environ.get("SCANNED_SHA", "main")
+BRANCH      = os.environ.get("BRANCH", "main")
 
 SEV_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
 SEV_EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "INFO": "⚪"}
@@ -58,7 +60,12 @@ results = sorted(
     key=lambda r: (SEV_ORDER.get(r.get("max_severity", "INFO"), 99), r.get("skill_name", "")),
 )
 
-mode_label    = "advanced (LLM + VirusTotal)" if SCAN_MODE == "advanced" else "simple (static + behavioral)"
+MODE_LABELS = {
+    "simple":     "simple (static + behavioral)",
+    "advanced-1": "advanced-1 (Haiku 4.5 + VirusTotal + Consensus 2)",
+    "advanced-2": "advanced-2 (Opus 4.6 + VirusTotal + Consensus 1)",
+}
+mode_label    = MODE_LABELS.get(SCAN_MODE, SCAN_MODE)
 artifact_name = f"skill-scan-{SCAN_MODE}-results-{RUN_ID}"
 artifact_url  = f"https://github.com/{REPO}/actions/runs/{RUN_ID}"
 
@@ -71,7 +78,7 @@ lines = []
 # ── Header (Markdown) ─────────────────────────────────────────────────────────
 lines.append("## Skill Security Scan")
 lines.append("")
-lines.append(f"**Target:** [{REPO_URL}]({REPO_URL})")
+lines.append(f"**Target:** [{REPO_URL}]({REPO_URL}) @ `{BRANCH}`")
 lines.append(f"**Mode:** {mode_label}")
 lines.append(f"**Results:** {scanned} skills scanned — {total} findings ({safe} safe)")
 lines.append(f"**Full report:** [{artifact_name}]({artifact_url})")

@@ -5,3 +5,7 @@ node_modules/
 
 skills-lock.json
 .claude/
+
+# Python
+__pycache__/
+*.pyc
