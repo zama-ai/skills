@@ -25,6 +25,7 @@ on:
       - '.agents/plugins/**'
       - 'scripts/translate_for_cursor.py'
       - 'scripts/generate_codex_artifacts.py'
+      - 'tests/test_cursor_rules.py'
       - '.github/workflows/artifacts-drift.yml'
 
 permissions: {}
@@ -58,6 +59,8 @@ jobs:
       - name: Check generated artifacts in sync
         run: |
           set -euo pipefail
+
+          uv run --with pyyaml python -m unittest discover -s tests
 
           failures=0
 

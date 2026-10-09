@@ -97,7 +97,11 @@ def parse_reference_md(path: Path, skill_name: str, plugin_name: str) -> dict:
     }
 
 
-def render_skill_mdc(skill: dict) -> str:
+def generated_marker(plugin_name: str) -> str:
+    return f"({plugin_name} plugin)_"
+
+
+def render_skill_mdc(skill: dict, plugin_name: str) -> str:
     return "\n".join([
         "---",
         f"description: {skill['description']}",
@@ -105,6 +109,8 @@ def render_skill_mdc(skill: dict) -> str:
         "---",
         "",
         f"# {skill['name']}",
+        "",
+        f"_{skill['name']} skill {generated_marker(plugin_name)}",
         "",
         skill["body"],
     ]) + "\n"
@@ -120,7 +126,7 @@ def render_reference_mdc(ref: dict, kind: str = "reference") -> str:
         "",
         f"# {pretty}",
         "",
-        f"_{kind.title()} for {ref['skill_name']} skill ({ref['plugin_name']} plugin)_",
+        f"_{kind.title()} for {ref['skill_name']} skill {generated_marker(ref['plugin_name'])}",
         "",
         ref["body"],
     ]) + "\n"
@@ -137,6 +143,9 @@ def write_or_check(path: Path, content: str, check: bool, dry_run: bool) -> bool
         print(f"  → {path.name}  (dry-run)")
         return True
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Replace links from symlinked installs instead of writing through them into another checkout.
+    if path.is_symlink():
+        path.unlink()
     path.write_text(content, encoding="utf-8")
     print(f"  → {path.name}")
     return True
@@ -168,6 +177,7 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
         return False
 
     ok = True
+    expected_paths: set[Path] = set()
 
     for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
         skill_md = find_skill_file(skill_dir)
@@ -179,7 +189,8 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
         print(f"Skill: {skill['name']}")
 
         main_path = output_dir / f"{plugin_kebab}-{skill_kebab}.mdc"
-        ok = write_or_check(main_path, render_skill_mdc(skill), check, dry_run) and ok
+        expected_paths.add(main_path)
+        ok = write_or_check(main_path, render_skill_mdc(skill, plugin_name), check, dry_run) and ok
 
         for ref_path in walk_references(skill_dir):
             ref = parse_reference_md(ref_path, skill["name"], plugin_name)
@@ -188,7 +199,23 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
             joined = "-".join(to_kebab_case(s) for s in rel_segments)
             ref_filename = f"{plugin_kebab}-{skill_kebab}--{joined or ref_kebab}.mdc"
             ref_out = output_dir / ref_filename
+            expected_paths.add(ref_out)
             ok = write_or_check(ref_out, render_reference_mdc(ref), check, dry_run) and ok
+
+    # Remove only rules this generator wrote (they carry its marker) and links left dangling by removed
+    # references; project rules that happen to share the prefix stay untouched.
+    marker = generated_marker(plugin_name)
+    for obsolete in sorted(set(output_dir.glob(f"{plugin_kebab}-*.mdc")) - expected_paths):
+        if obsolete.exists() and marker not in obsolete.read_text(encoding="utf-8"):
+            continue
+        if check:
+            print(f"Obsolete: {obsolete}", file=sys.stderr)
+            ok = False
+        elif dry_run:
+            print(f"Would remove: {obsolete}")
+        else:
+            obsolete.unlink()
+            print(f"Removed: {obsolete}")
 
     return ok
 
