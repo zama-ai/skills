@@ -34,7 +34,7 @@ The official examples live in [zama-ai/sdk `examples/`](https://github.com/zama-
 | Embedded wallet | `react-turnkey-wallet` |
 | Node.js script or service | `node-viem`, `node-ethers` |
 
-The React examples show provider setup, a server route that forwards relayer calls with the API key, and the confidential token flows.
+The React examples show provider setup and the confidential token flows.
 
 ## Rules that hold across releases
 
@@ -42,7 +42,6 @@ The React examples show provider setup, a server route that forwards relayer cal
 - **Ask for decryption permission on a click.** Wait for a valid permit before running decrypt queries, so pages never open a wallet prompt on load.
 - **Make the contract an operator first.** A contract that pulls confidential tokens with `confidentialTransferFrom` must be the holder's operator on that token. The expiry is in Unix seconds.
 - **Expect results later.** A mined receipt does not mean results can be decrypted. Show pending and error states, and re-read handles after each transaction.
-- **Keep relayer API keys on the server.** Forward relayer calls through a server route, as the examples do. The example routes accept any caller, so add authentication or rate limits before production.
 - **Use `cleartext()` only on local test chains.** It does not encrypt.
 - **Keep units exact.** Use `bigint` base units and read `decimals()` and `rate()` from the actual wrapper.
 - **Reset private state when the account or chain changes.** Never show a value decrypted for another account, chain or contract.

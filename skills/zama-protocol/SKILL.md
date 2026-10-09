@@ -44,4 +44,4 @@ Addresses, timing, which functions run, plaintext deposits and withdrawals, and 
 
 ## Check before you rely on a version
 
-Packages, protocol releases and deployments change. Read the installed package versions and the [protocol changelog](https://docs.zama.org/protocol/changelog) before using a version-specific behavior, and look up addresses instead of recalling them.
+Packages, protocol releases and deployments change. Read the installed package versions and the [protocol changelog](https://docs.zama.org/protocol/changelog) before using a version-specific behavior, and look up addresses instead of recalling them. To find any docs page, search the index at `https://docs.zama.org/protocol/llms.txt` and open its `.md` links.
