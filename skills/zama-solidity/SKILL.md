@@ -15,38 +15,21 @@ Load **zama-protocol** first. Open a reference only when the task needs it:
 | Design and cost, learning from deployed apps | `references/code-map.md` |
 | Project setup | `references/setups/hardhat.md` or `references/setups/foundry.md` |
 
+Complete, maintained contracts with tests are in the [Zama code examples](https://docs.zama.org/protocol/examples). Start from the closest one, such as the [sealed-bid auction](https://docs.zama.org/protocol/examples/auctions/sealed-bid-auction.md) or the [ERC-7984 to ERC-20 swap](https://docs.zama.org/protocol/examples/openzeppelin-confidential-contracts/erc7984/swaperc7984toerc20.md), and apply the rules below.
+
 ## What good FHEVM code looks like
 
 Ordinary Solidity safety still applies: checks-effects-interactions, `nonReentrant` around token calls, and access control.
 
 ### Import an input where it was encrypted, then pass the handle
 
-```solidity
-function bid(externalEuint64 encryptedAmount, bytes calldata inputProof) external {
-    euint64 amount = FHE.fromExternal(encryptedAmount, inputProof); // the proof names this contract
-    FHE.allowTransient(amount, address(token)); // the token may use it during this call
-    euint64 sent = token.confidentialTransferFrom(msg.sender, address(this), amount);
-    // Credit `sent`, not `amount`.
-}
-```
+`FHE.fromExternal(input, proof)` works only in the contract the client encrypted for. To pay with it, call `FHE.allowTransient(amount, address(token))`, then `token.confidentialTransferFrom(msg.sender, address(this), amount)`. Passing the input and proof on to the token fails. Grant the same temporary access before handing a stored handle to another contract.
 
-Passing `encryptedAmount` and `inputProof` on to the token fails: the proof was made for this contract. Grant the same temporary access before handing a stored handle to another contract.
-
-### Credit what actually moved
-
-An ERC-7984 transfer the sender cannot pay moves an encrypted zero instead of reverting. Use the amount the transfer returns, never the amount requested.
+Credit the amount the transfer returns, never the amount requested: an ERC-7984 transfer the sender cannot pay moves an encrypted zero instead of reverting.
 
 ### Choose with `FHE.select`
 
-```solidity
-ebool isHigher = FHE.gt(total, highestBid);
-highestBid = FHE.select(isHigher, total, highestBid);
-highestBidder = FHE.select(isHigher, FHE.asEaddress(msg.sender), highestBidder);
-FHE.allowThis(highestBid);
-FHE.allowThis(highestBidder);
-```
-
-Both sides are always computed, and nothing reverts on the encrypted outcome.
+`if`, `require` and `revert` cannot read an encrypted condition. Compute both values and pick one with `FHE.select(condition, a, b)`. Nothing reverts on the encrypted outcome.
 
 ### Grant access to every new handle you keep
 
@@ -54,26 +37,7 @@ Each operation returns a new handle that nobody can use after the transaction. C
 
 ### Reveal with a proof, once
 
-```solidity
-function requestReveal() external {
-    require(stage == Stage.Open && block.timestamp >= endTime, "not ended");
-    stage = Stage.Revealing;
-    FHE.makePubliclyDecryptable(highestBidder);
-    winnerHandle = FHE.toBytes32(highestBidder);
-}
-
-function finalize(address winner, bytes calldata decryptionProof) external {
-    require(stage == Stage.Revealing, "wrong stage");
-    bytes32[] memory handles = new bytes32[](1);
-    handles[0] = winnerHandle; // the stored handle, never one the caller chooses
-    FHE.checkSignatures(handles, abi.encode(winner), decryptionProof);
-    stage = Stage.Settled; // settles once
-    FHE.allowTransient(highestBid, address(token));
-    token.confidentialTransfer(seller, highestBid); // the price stays encrypted
-}
-```
-
-Reveal only what settlement needs. Here the winner's address is public. The price is not.
+Mark the handle with `FHE.makePubliclyDecryptable` and store it. Accept the clear value only through `FHE.checkSignatures` against that stored handle, never one the caller passes, and advance a stage so settlement runs once. Reveal only what settlement needs: an auction can reveal the winner and pay the seller the encrypted price. `references/fhe-advanced.md` has the full flow.
 
 ### Configure every contract that calls `FHE`
 

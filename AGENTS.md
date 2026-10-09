@@ -40,13 +40,14 @@ tests/                          # Generator regression checks
 
 **Write for a first read.** One rule per heading, in plain words, with the reason in a sentence. Agents load SKILL.md on every task; put everything else in a reference the SKILL.md routes to.
 
-**Link to maintained sources; embed little code.** Embedded code goes stale. Point to:
+**Link to maintained sources; embed no contract or client code.** Embedded code goes stale, and agents copy fragments without the checks around them. Point to:
 - [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — ERC-7984, token patterns
 - [Protocol registry](https://github.com/zama-ai/protocol-registry) — deployed addresses
 - The SDK's version-tagged `llms.txt` and official `examples/` — client code
+- The [Zama code examples](https://docs.zama.org/protocol/examples) — complete contracts with tests
 - The Solidity code map — Etherscan-verified mainnet application sources
 
-Embed only short Solidity examples for rules agents get wrong. The `solidity-examples` workflow compiles every Solidity code block in `skills/zama-solidity` against the latest published packages (`uv run scripts/check_solidity_examples.py` after `npm install` in `tests/solidity-examples`). Declare any new state an example needs in the script's contract header. Do not embed SDK code: its API changes between releases.
+State each rule in prose with exact identifiers, and link the complete example that shows it.
 
 **Use ERC-7984** for any confidential token work. Never reimplement encrypted balances, allowances, or transfers.
 

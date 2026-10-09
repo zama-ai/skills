@@ -11,7 +11,7 @@ A plugin (id: `zama-protocol`, in the `zama-skills` marketplace) bundling three 
 | Skill               | What it covers                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------ |
 | **zama-protocol**   | The FHEVM model, package choice, planning, deployed addresses                        |
-| **zama-solidity**   | Encrypted Solidity — contract rules with examples, ERC-7984, reveals, Hardhat/Foundry |
+| **zama-solidity**   | Encrypted Solidity — contract rules, maintained examples, ERC-7984, reveals, Hardhat/Foundry |
 | **zama-typescript** | Clients with `@zama-fhe/sdk` — React, viem, ethers, Node, official examples           |
 
 All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client work to `zama-typescript`. Contract and client skills load `zama-protocol` first, and references are read only when a task needs them. The skills point to maintained sources — the protocol registry, OpenZeppelin, the SDK's version-matched docs and examples, and verified mainnet contracts — rather than copying tutorials.

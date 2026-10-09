@@ -15,7 +15,7 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 2. **Off-chain:** fetch the clear values and the decryption proof with `@zama-fhe/sdk` public decryption. In Hardhat tests, the plugin's `decryptPublic*WithSignatures` helpers return the same values and proof.
 3. **Contract:** call `FHE.checkSignatures(handles, abi.encode(values), proof)` with the stored handles, and values in the same order. Advance the stage so settlement runs once.
 
-If a later update changes a value that must still be public, mark the new handle again. The [public decryption guide](https://docs.zama.org/protocol/solidity-guides/smart-contract/oracle.md) explains the contract side. Its client code uses the deprecated `relayer-sdk`, so take client calls from `@zama-fhe/sdk` instead.
+If a later update changes a value that must still be public, mark the new handle again. The [public decryption guide](https://docs.zama.org/protocol/solidity-guides/smart-contract/oracle.md) explains the contract side, and the [heads-or-tails example](https://docs.zama.org/protocol/examples/basic/decryption/heads-or-tails.md) shows it in a complete contract. Its client code uses the deprecated `relayer-sdk`, so take client calls from `@zama-fhe/sdk` instead.
 
 ## Operation limits
 
