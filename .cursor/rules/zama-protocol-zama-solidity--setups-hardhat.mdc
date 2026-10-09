@@ -9,7 +9,7 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 
 # Hardhat
 
-For new projects, use [@fhevm/hardhat-plugin-v3](https://www.npmjs.com/package/@fhevm/hardhat-plugin-v3) with Hardhat 3. Select tooling compatible with the deployed protocol; verify registry tags and peer dependencies rather than following an old README prerelease banner.
+For new projects, use [@fhevm/hardhat-plugin-v3](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/hardhat/v3/plugin/pkg) with Hardhat 3. Select tooling compatible with the deployed protocol; verify registry tags and peer dependencies rather than following an old README prerelease banner.
 
 Use the public [Hardhat 3 example project](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/hardhat/v3/fhevm-hardhat-template/pkg) as a model, not a ready-made standalone template. Register the plugin through Hardhat 3's `plugins` configuration and consult its published API for input/decrypt helpers.
 

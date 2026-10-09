@@ -1,6 +1,6 @@
 # Foundry
 
-For new projects, use [@fhevm/forge](https://www.npmjs.com/package/@fhevm/forge), the FHEVM companion to `forge-std`. Follow its published README and [release source](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/foundry/forge-fhevm-std/pkg) for dependencies, remappings and execution modes; match the target protocol release.
+For new projects, use `@fhevm/forge`, the FHEVM companion to `forge-std`. Follow its [release package and README](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/foundry/forge-fhevm-std/pkg) for dependencies, remappings and execution modes; match the target protocol release.
 
 - The new library uses `TestFhevm`; the older standalone `forge-fhevm` template uses different setup and helper APIs. Do not mix their recipes.
 - Cleartext tests validate logic and permissions, not actual FHE/KMS computation. Forks may not know ciphertext plaintexts computed outside that test; check the library's fork-mode limitations.
