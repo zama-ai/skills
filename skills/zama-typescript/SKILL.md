@@ -1,86 +1,32 @@
 ---
 name: zama-typescript
-description: Integrate the Zama FHE SDK into TypeScript apps — React, browser, Node.js, MV3 extensions. Use when the user mentions `@zama-fhe/sdk`, `@zama-fhe/react-sdk`, `@fhevm/sdk` (the low-level Relayer SDK), the legacy `@zama-fhe/relayer-sdk`, ViemSigner, EthersSigner, createConfig, web(), node(), cleartext(), ZamaProvider, ZamaSDK, Token, WrappedToken, encrypt, decryptValues, useShield, useConfidentialBalance, useEncrypt, useDecryptValues, useGrantPermit, useHasPermit, or any TypeScript/JavaScript code that encrypts inputs, reads encrypted handles, or decrypts FHE outputs. Also use for SDK setup, signer choice, permit/delegation patterns, and React hook selection. For protocol concepts, architecture, and the low-level SDK design deep-dive, load the zama-protocol skill. For Solidity contract development, load the zama-solidity skill.
+description: Build, review, or debug Zama FHEVM TypeScript/JavaScript integration — @zama-fhe/sdk, @zama-fhe/react-sdk, encryption/decryption, ERC-7984 tokens, permits/operators, wagmi/viem/ethers, browser or Node services, and async wallet/transaction flows. Load zama-protocol first; use zama-solidity for contracts.
 license: BSD-3-Clause-Clear
 ---
 
-# Zama TypeScript — SDK Integration
+# Zama TypeScript
 
-Integrate the Zama FHE SDK into browser apps, React apps, Node.js backends, browser extensions, and local setup environments. React Native is not directly supported; use a Node backend and proxy.
+Load **zama-protocol** first. Use `references/patterns.md` for integration pitfalls and the matching public docs below for exact signatures; do not copy whole SDK tutorials into this skill.
 
-**Before starting:** load the **zama-protocol** skill and read the universal gotchas — they cover protocol-level bugs that apply to all FHEVM work. What follows here is TypeScript/SDK-specific.
+## Select the package and release
 
-## Which SDK?
+Use `@zama-fhe/sdk` for core integration and `@zama-fhe/react-sdk` for React; respect their peer dependencies. `@fhevm/sdk` is a published low-level backend. The high-level SDK pins its compatible backend: do not independently replace it with npm `latest`.
 
-Current published landscape (verified against the `zama-ai/sdk` monorepo):
+`@zama-fhe/relayer-sdk` is deprecated. The [protocol changelog](https://docs.zama.org/protocol/changelog) records security-only maintenance until 2026-11-06, then no support. Use it only while maintaining/migrating existing integrations or compatible pinned tooling.
 
-- **`@zama-fhe/sdk`** (currently `3.x`) — **recommended** high-level user-facing SDK. `ZamaSDK` + `createConfig`, relayer transports (`web()` / `node()` / `cleartext()`), signer adapters (`ViemSigner`, `EthersSigner`), storage backends (`IndexedDBStorage`, `MemoryStorage`, `ChromeSessionStorage`), chain presets (`sepolia`, `mainnet`, `hoodi`, `ingenTestnet`, `bscTestnet`, `hardhat` from `@zama-fhe/sdk/chains`), the `Token` / `WrappedToken` / `WrappersRegistry` API. Most of this skill documents this package. Repo: github.com/zama-ai/sdk · docs: **https://docs.zama.org/protocol/sdk**.
-- **`@zama-fhe/react-sdk`** — React hooks layered on `@zama-fhe/sdk`. Requires `@zama-fhe/sdk` as a peer.
-- **`@zama-fhe/relayer-sdk`** (currently `0.4.x`) — the public lower-level Relayer SDK that `@zama-fhe/sdk` uses **internally** today. Still maintained. Import directly if you need raw relayer types or want to skip the high-level wrapper, but for most apps the wrapper is the right surface.
+Check the project's installed package declarations and release channel before using a documented feature. Hosted docs and repository `main` may describe a newer release than the project uses.
 
-A future low-level SDK called `@fhevm/sdk` exists inside the FHEVM monorepo (`zama-ai/fhevm/sdk/js-sdk`) but is currently marked `"private": true` — **not yet on npm, not user-facing**. The zama-protocol skill's `references/sdk-internals.md` describes its internal design.
+## Route by task
 
----
+| Task | Public source |
+|------|---------------|
+| Setup, signer/provider, transports/storage | [Quick start](https://docs.zama.org/protocol/sdk/getting-started/quick-start.md), [configuration](https://docs.zama.org/protocol/sdk/guides/configuration.md) |
+| Tokens, wrappers, shield/unshield | [Core SDK API](https://docs.zama.org/protocol/sdk/api-references/sdk.md) |
+| React/wagmi hooks and query behavior | [React API](https://docs.zama.org/protocol/sdk/api-references/react.md) |
+| Custom contracts: encrypted inputs and outputs | [Encrypt/decrypt guide](https://docs.zama.org/protocol/sdk/guides/encrypt-decrypt.md) |
+| Permits, decryption delegation, credential storage | [Permit model](https://docs.zama.org/protocol/sdk/concepts/permit-model.md), [delegated decryption](https://docs.zama.org/protocol/sdk/guides/delegated-decryption.md) |
+| Node request identity/storage | [Node guide](https://docs.zama.org/protocol/sdk/guides/node-js-backend.md) |
+| Browser/WASM compatibility | [Supported environments](https://docs.zama.org/protocol/sdk/getting-started/supported-environments.md), [security headers](https://docs.zama.org/protocol/sdk/concepts/security-model.md#browser-security-headers) |
+| Verified deployment addresses | **zama-protocol** → `references/addresses.md` |
 
-## References
-
-This file is a router for SDK usage. Choose one environment setup first, then load only the task reference that matches the work. Load on demand — don't read them all up front.
-
-### Environment setups (pick one)
-
-| Environment | File |
-|-------------|------|
-| React + wagmi | `references/setups/react-wagmi.md` |
-| Browser + viem | `references/setups/browser-viem.md` |
-| Browser + ethers | `references/setups/browser-ethers.md` |
-| Node.js (scripts, servers, workers) | `references/setups/node-backend.md` |
-| MV3 browser extension | `references/setups/extension-mv3.md` |
-| Local Setup / cleartext | `references/setups/localhost-setup.md` |
-
-### Task references (pick as needed)
-
-| Task | File |
-|------|------|
-| SDK mental model, environment matrix, universal TS gotchas | `references/overview.md` |
-| Package overview, sub-paths, signer choice, GenericSigner | `references/packages-and-signers.md` |
-| ERC-7984 token flows: shield, transfer, balance, unshield | `references/tokens.md` |
-| Custom FHE contracts: encrypt input, read handles, decrypt | `references/custom-contracts.md` |
-| Permits, useGrantPermit, useRevokePermits, delegation, TTLs | `references/permissions.md` |
-| React provider, storage, hook selection, decrypt UX | `references/react.md` |
-| Verified contract addresses | `references/addresses.md` — **never guess addresses** |
-
----
-
-## TypeScript-specific reminders
-
-These supplement the universal gotchas in the zama-protocol skill.
-
-- **COOP/COEP headers required for browser.** The `web()` relayer uses a Web Worker with WASM + `SharedArrayBuffer`. Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Vite: `server.headers`. Next.js: `async headers()` in config.
-
-- **Install `@zama-fhe/sdk` explicitly.** `@zama-fhe/react-sdk` requires it as a peer dependency and pnpm will not install peers automatically.
-
-- **Build the config with `createConfig`.** `new ZamaSDK(createConfig({ chains, relayers, storage }))` — from `@zama-fhe/sdk/viem`, `@zama-fhe/sdk/ethers`, or `@zama-fhe/react-sdk/wagmi`. It builds the signer/provider and wires chain switching; there is no manual `getChainId`.
-
-- **Sepolia needs no relayer proxy.** The `sepolia` chain preset's `relayerUrl` already points at the public Zama testnet relayer. Only override `relayerUrl` on mainnet (proxy through your backend to protect the API key).
-
-- **Ciphertexts bind to one target contract.** The `contractAddress` in `encrypt()` must be the contract that will consume it. Encrypt per hop.
-
-- **Encrypt returns ABI-ready hex.** `encrypt()` returns `{ encryptedValues, inputProof }` already as `0x` hex (`encryptedValues` are `bytes32`, `inputProof` is `bytes`). Pass them straight to contract calls — do **not** run them through `bytesToHex` / `hexlify`.
-
-- **Shield/unshield live on `WrappedToken`.** `sdk.createToken(addr)` → `Token` (balance, transfer, operators); `sdk.createWrappedToken(addr)` → `WrappedToken` (adds `shield`, `unshield`, `allowance`).
-
-- **Do not trigger decrypt on render.** Gate decrypting reads behind `useHasPermit` / `hasPermit`. If missing, show an explicit button calling `useGrantPermit` / `grantPermit`. Prevents surprise wallet popups.
-
-- **Use the wagmi adapter for React + wagmi.** `createConfig` from `@zama-fhe/react-sdk/wagmi` is the recommended path — it derives the signer from the wagmi `Config` and subscribes to connection changes (no "build a ViemSigner after connect" boundary).
-
-- **Do not treat the SDK as token-only.** Token helpers are the happy path for ERC-7984, but `useEncrypt` / `useDecryptValues` support custom FHE contracts (voting, auctions, identity). Route those to `references/custom-contracts.md`.
-
-## Canonical sources
-
-- **Agent discovery index (`llms.txt`):** https://raw.githubusercontent.com/zama-ai/sdk/main/llms.txt — curated link index of the SDK docs (usable without cloning the repo). Fetch this first to find the right page, then follow the raw-GitHub link. Full concatenated text (large; fallback only): https://raw.githubusercontent.com/zama-ai/sdk/main/llms-full.txt
-- **`@zama-fhe/sdk` hosted docs (authoritative):** https://docs.zama.org/protocol/sdk
-- **`@zama-fhe/sdk` repo (source + examples + changelog):** https://github.com/zama-ai/sdk
-- **`@zama-fhe/sdk` examples:** https://github.com/zama-ai/sdk/tree/main/examples/
-- **`@fhevm/sdk` (low-level Relayer SDK):** https://github.com/zama-ai/fhevm/tree/main/sdk/js-sdk
-
-Current major: `@zama-fhe/sdk@3.x`. Check the repo's `CHANGELOG.md` before upgrading existing apps.
+For other tasks, discover the appropriate stable documentation through the public [SDK index](https://raw.githubusercontent.com/zama-ai/sdk/main/llms.txt). Avoid `/beta/` documentation unless the project uses that release channel. Private app code, repository links and unreleased implementation details must not enter distributed advice.

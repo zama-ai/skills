@@ -1,0 +1,26 @@
+---
+description: Detailed reference for code map (zama-solidity skill)
+alwaysApply: false
+---
+
+# Code Map
+
+_Reference for zama-solidity skill (zama-protocol plugin)_
+
+# Good FHEVM Code: Principles and Sources
+
+- **Budget work and dependencies.** Count nested token operations and the weighted critical path. Transaction HCU caps do not guarantee throughput; measure ciphertext completion, not mock gas. Use the [release cost table](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu).
+- **Avoid unnecessary shared chains.** Encrypted balances and accumulators link transactions. Wallet pools partition recipient balances; shared source balances and global aggregates remain.
+- **Choose operations deliberately.** Use the smallest supported type that fits and scalar operands already public. Shifts suit power-of-two formulas; preserve ranges and rounding. `div`/`rem` require plaintext divisors. Packing is not automatically cheaper.
+- **Preserve economics and privacy.** Validate actual ERC-7984 transferred amounts. Client-computed fields remain untrusted. Keep required ACL grants; use transient grants for single-transaction calls. Public settlement requires proofs bound to expected handles and replay protection.
+
+## Read deployed examples
+
+| Pattern | Verified Ethereum mainnet source | Start here |
+|---------|----------------------------------|------------|
+| Auction payment checks and allocation | [AuctionToken](https://etherscan.io/address/0x04a5b8C32f9c38092B008A4939f1F91D550C4345#code) | `AuctionToken.sol`: `submitEncryptedBid`, `_computeBidAllocation`; scalar multiplication, returned-payment checks, public-denominator division. |
+| Partitioned custody and clone configuration | [WalletFactory](https://etherscan.io/address/0xBf58EE954CaeeF84B44F30131421e606272E393F#code) | `WalletFactory.sol`, `AuctionWallet.sol`: wallet assignment and `initialize`. |
+| RFQ lifecycle and cheaper fee formula | [Proxy](https://etherscan.io/address/0x2827Eed03e8b8005bDf0E2e5901e062a27b7cE67#code) → [ConfidentialSwap implementation](https://etherscan.io/address/0xD7b3bD880CDc15a5Ea15921aE5104b33Ee5Ae69b#code) | `IntentLifecycleLib.sol`, `EscrowLib.sol`, `FeeLib.takeFee`: partitioned escrow and power-of-two fees; shift 64 needs separate handling for `euint64`. |
+| Aggregate reveal and encrypted claims | [Deposit batcher](https://etherscan.io/address/0x324EA89FD3784036673BfE6Ffee2334A088F40Cc#code) / [redeem batcher](https://etherscan.io/address/0x96Cd3Faa7483783Ac2Eb715f6333361500F1eec9#code) | `VaultBatcherConfidential.sol` and bundled OpenZeppelin `BatcherConfidential.sol`: `_join`, `dispatchBatchCallback`, `_claim`; shared totals, proof verification, cancellation, and rounding. Small batches can expose individual amounts. |
+
+Checked 2026-10-09. Include application code only when Etherscan verifies its mainnet deployment; private repositories and testnet verification do not qualify. Follow proxies to their current verified implementation and linked libraries. Verification is not an audit. Read relevant functions and their callees; preserve economic/privacy constraints and check installed API versions before adapting them.

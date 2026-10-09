@@ -20,47 +20,18 @@ A Claude Code plugin (id: `zama-protocol`, marketplace: `zama-skills`) bundling 
 ## Structure
 
 ```
-skills-repo/                         ← this repo (zama-ai/skills)
-├── .claude-plugin/
-│   ├── marketplace.json             # Marketplace index (single plugin, source: "./")
-│   └── plugin.json                  # Plugin manifest (name: zama-protocol)
-├── skills/
-│   ├── zama-protocol/
-│   │   ├── SKILL.md                 # Protocol concepts, universal gotchas, cross-references
-│   │   └── references/
-│   │       ├── concepts.md          # FHEVM mental model, planning, production readiness
-│   │       └── addresses.md         # Verified contract addresses
-│   ├── zama-solidity/
-│   │   ├── SKILL.md                 # Solidity router + domain-specific reminders
-│   │   └── references/
-│   │       └── solidity/
-│   │           ├── solidity.md      # Encrypted Solidity router + config
-│   │           ├── erc7984.md       # Confidential token recipe + interface
-│   │           ├── fhe-advanced.md  # Raw FHE ops, manual ACL, production decryption
-│   │           └── setups/
-│   │               ├── foundry.md
-│   │               └── hardhat.md
-│   └── zama-typescript/
-│       ├── SKILL.md                 # TypeScript router + domain-specific reminders
-│       └── references/
-│           └── typescript/
-│               ├── typescript.md    # SDK mental model + environment matrix
-│               ├── sdk-package-and-signers.md
-│               ├── sdk-token-flows.md
-│               ├── sdk-custom-contract-flows.md
-│               ├── sdk-permissions-and-sessions.md
-│               ├── react-sdk.md
-│               └── setups/
-│                   ├── react-wagmi.md
-│                   ├── browser-viem.md
-│                   ├── browser-ethers.md
-│                   ├── node-backend.md
-│                   ├── extension-mv3.md
-│                   └── local-hardhat.md
-├── AGENTS.md                        # this file (CLAUDE.md is a symlink here)
-├── CLAUDE.md                        # symlink → AGENTS.md
-└── README.md
+.claude-plugin/                  # Plugin metadata; version source
+skills/
+  zama-protocol/                # Universal rules, concepts, deployment discovery
+  zama-solidity/                # Contract decisions, verified code map, setup pointers
+  zama-typescript/              # SDK router and integration pitfalls
+.cursor/rules/                  # Generated; removed references remove their rules
+.codex-plugin/                  # Generated
+.agents/plugins/                # Generated marketplace
+scripts/                        # Artifact generators
+tests/                         # Generator regression checks
 ```
+
 
 ## Key Rules
 
@@ -70,10 +41,11 @@ skills-repo/                         ← this repo (zama-ai/skills)
 
 **Link to living code, don't embed it.** Code in a skill file can't be tested or linted and goes stale. Point to:
 - [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — ERC-7984, token patterns
-- [zama-ai/dapps](https://github.com/zama-ai/dapps/tree/main/packages/hardhat/contracts) — example contracts
-- [zama-ai/protocol-apps](https://github.com/zama-ai/protocol-apps/tree/main/contracts) — deployed contracts
+- The Solidity code map — Etherscan-verified Ethereum mainnet application sources
 
 **Use ERC-7984** for any confidential token work. Never reimplement encrypted balances, allowances, or transfers.
+
+**Never publish private code or links.** Private apps may inform investigation, but distributed advice must be independently supported by public APIs/docs. Application code pointers must lead to verified mainnet Etherscan source, including current proxy implementations.
 
 **No duplication across skills.** Universal gotchas live in zama-protocol. Domain skills carry only domain-specific reminders and cross-reference zama-protocol for the full set.
 
@@ -86,7 +58,7 @@ skills-repo/                         ← this repo (zama-ai/skills)
 
 1. Check official docs: https://docs.zama.org
 2. Verify the API against the latest packages.
-3. Test with a stock LLM — does it actually get this wrong?
+3. For new advice, test with a stock LLM — does it actually get this wrong?
 4. If the LLM already knows it AND humans don't need it explained, don't add it.
 
 ## References

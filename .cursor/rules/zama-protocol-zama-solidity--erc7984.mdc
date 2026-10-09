@@ -7,101 +7,15 @@ alwaysApply: false
 
 _Reference for zama-solidity skill (zama-protocol plugin)_
 
-# ERC-7984 Confidential Tokens
+# ERC-7984 Integration
 
-Read this when building a confidential token (encrypted ERC20, private-balance token, FHE token). **Use the ERC-7984 standard from OpenZeppelin's confidential contracts library.** Never reimplement encrypted balances, allowances, or transfers.
+Use the installed [OpenZeppelin ERC-7984 implementation](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts/blob/master/contracts/token/ERC7984/ERC7984.sol) and its [interfaces/extensions](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts/tree/master/contracts/token/ERC7984). Check compatible package versions before choosing an extension; do not reproduce a token implementation or a full API table here.
 
-- Repo: https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
-- Standard: ERC-7984, the confidential fungible token interface for fhEVM
+- **Follow the value.** A financial contract needs actual transfers, custody and refunds, or must clearly expose that it only records assertions. Custom encrypted balances/allowances duplicate ERC-7984's security responsibilities.
+- **Import external inputs at their target.** An auction importing a proof bound to itself forwards the resulting `euint64` to the token overload with `FHE.allowTransient`. Passing that original proof to the token's external-input overload uses the wrong target. The holder must separately authorise the auction as an operator.
+- **Use the returned transferred amount.** Transfers can silently return encrypted zero. Preserve payment checks before crediting bids or shares; receiver hooks also affect transfer acceptance.
+- **Separate permissions.** Token operators authorise transfers; decryption delegation authorises reading. Inspect any ACL grants the transfer creates rather than treating the two permission systems as equivalent.
+- **Use actual units.** The base token defaults to six decimals; extensions can differ. Wrappers expose `decimals()` and `rate()` independently of their underlying ERC-20. Check ranges before narrowing and avoid floating-point accounting.
+- **Resolve overloads explicitly** when ethers cannot distinguish external-input/proof calls from existing-handle calls.
 
-## When to use ERC-7984
-
-Three patterns to check for — first two are resolved by inheriting ERC-7984 from `@openzeppelin/confidential-contracts`, the third by using an already-deployed wrapper instead of deploying your own:
-
-- **Reinventing ERC-7984.** The contract maintains its own `mapping(address => euint64) balances` (or similar) with hand-rolled transfer and allowance logic. The OpenZeppelin implementation is audited and already handles ACL, transient allowance handles, and the silent-zero-transfer semantics that hand-rolled versions routinely get wrong. Replace the custom mapping with `ERC7984` inheritance.
-
-- **Missing value leg entirely.** The contract *looks* like a confidential financial primitive — named fund, vault, pool, escrow, payroll, subscription, auction settlement, payment — accepts an `externalEuint64` amount, runs cap/policy checks, updates encrypted aggregates… but never imports `IERC7984` / `@openzeppelin/confidential-contracts` and never invokes `confidentialTransfer*`. The contract is an encrypted policy/attestation engine, not a financial primitive: its "exposure" is a sum of *claimed intent*, not held assets. Grep the repo for `IERC7984`, `confidentialTransfer`, and `@openzeppelin/confidential-contracts` before signing off. If absent, either confirm the project explicitly documents this (README says "no token movement") and flag the disclosure, or raise it as a finding. Reviewers — including agents running this skill — routinely sign off on the FHE plumbing while missing that no token is ever imported, approved, or transferred.
-
-- **Reinventing a confidential wrapper for a token that already has one.** Zama already deploys official ERC-7984 wrappers for the most common ERC-20s — `cUSDC`, `cUSDT`, `cWETH`, `cZAMA` on mainnet, with mock counterparts on Sepolia. See `references/addresses.md` for the full list and the Wrappers Registry. Before deploying a custom `ERC7984ERC20Wrapper` (or a hand-rolled wrap/unwrap pair) for USDC/USDT/WETH/ZAMA, **use the deployed wrapper.** Redeploying fragments the encrypted balance pool, breaks composability with other dApps that already integrate the official wrapper, and skips the audited registry. Custom wrappers only make sense for ERC-20s that do not yet have an official confidential wrapper — and even then, check `references/addresses.md` first.
-
-The reminder under "Solidity-specific reminders" in `SKILL.md` is the entry point; this section is what it cross-links to.
-
-## Mintable & Burnable Confidential Token
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
-
-import {FHE, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ERC7984} from "@openzeppelin/confidential-contracts/token/ERC7984/ERC7984.sol";
-import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
-
-contract MyConfidentialToken is ERC7984, Ownable, ZamaEthereumConfig {
-    constructor(
-        address owner,
-        string memory name_,
-        string memory symbol_,
-        string memory uri_
-    ) ERC7984(name_, symbol_, uri_) Ownable(owner) {}
-
-    function mint(address to, externalEuint64 amount, bytes memory proof) external onlyOwner {
-        _mint(to, FHE.fromExternal(amount, proof));
-    }
-
-    function burn(address from, externalEuint64 amount, bytes memory proof) external onlyOwner {
-        _burn(from, FHE.fromExternal(amount, proof));
-    }
-}
-```
-
-## What ERC-7984 provides
-
-| Function | Description |
-|---|---|
-| `confidentialTransfer(to, encAmount, proof)` | Transfer with encrypted input |
-| `confidentialTransferFrom(from, to, encAmount, proof)` | Operator/delegated transfer |
-| `confidentialTransferAndCall(...)` | Transfer + receiver hook (ERC-7984 Receiver) |
-| `confidentialBalanceOf(account)` | Returns encrypted balance handle |
-| `confidentialTotalSupply()` | Returns encrypted total supply |
-| `setOperator(operator, until)` / `isOperator(...)` | Time-bound operator approvals |
-| `requestDiscloseEncryptedAmount(amount)` | Request decryption disclosure |
-| `discloseEncryptedAmount(amount, cleartext, proof)` | Verify and disclose a decrypted amount |
-| `name()` / `symbol()` / `decimals()` (= **6**, not 18) / `contractURI()` | Standard metadata |
-
-## External inputs don't proxy — convert in the caller
-
-`FHE.fromExternal(handle, proof)` only works when called from the contract the proof was encrypted against. If your contract receives an `externalEuint64` from a user and wants to hand it to the token (e.g. an auction escrowing a bid), **convert it yourself first, then call the `euint64` overload of the token**:
-
-```solidity
-function placeBid(externalEuint64 encBid, bytes calldata proof) external {
-    euint64 bid = FHE.fromExternal(encBid, proof); // proof bound to THIS contract
-    FHE.allowThis(bid);
-    FHE.allowTransient(bid, address(token));       // let the token read the handle
-    token.confidentialTransferFrom(msg.sender, address(this), bid); // euint64 overload
-    // ... fold / escrow / etc.
-}
-```
-
-Do **not** pass `(encBid, proof)` straight into `confidentialTransferFrom(..., externalEuint64, bytes)`. That overload calls `FHE.fromExternal` inside the *token's* context, so the ZKPoK binding check compares the proof's target against the token address even though the user encrypted against your auction. It reverts deep inside `InputVerifier` with `InvalidSigner`, with no compile hint.
-
-Rule: **the contract that owns the proof must be the one that calls `FHE.fromExternal`.** The downstream token call then takes the resulting persistent `euint64`, never the external input. The bidder still needs to have called `token.setOperator(yourContract, until)` first, since `confidentialTransferFrom` gates on operator approval.
-
-## Extensions
-
-Under `@openzeppelin/confidential-contracts/token/ERC7984/extensions/`:
-
-| Extension | Purpose |
-|---|---|
-| `ERC7984Freezable` | Freeze/unfreeze accounts |
-| `ERC7984Restricted` | Transfer restrictions |
-| `ERC7984ObserverAccess` | Read access for observers |
-| `ERC7984Omnibus` | Omnibus accounts |
-| `ERC7984Rwa` | Real-world asset features |
-| `ERC7984Votes` | Governance voting on encrypted balances |
-| `ERC7984ERC20Wrapper` | Wrap an existing ERC20 into ERC-7984 |
-
-## Example projects
-
-- https://github.com/zama-ai/protocol-apps/tree/main/contracts — production contracts
-- https://github.com/zama-ai/dapps — full confidential dApps with frontends
+For wrapper discovery, load **zama-protocol** → `references/addresses.md`. For custody/payment examples, read `code-map.md`; use Etherscan's verified sources instead of private app repositories.

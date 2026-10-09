@@ -168,6 +168,7 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
         return False
 
     ok = True
+    expected_paths: set[Path] = set()
 
     for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
         skill_md = find_skill_file(skill_dir)
@@ -179,6 +180,7 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
         print(f"Skill: {skill['name']}")
 
         main_path = output_dir / f"{plugin_kebab}-{skill_kebab}.mdc"
+        expected_paths.add(main_path)
         ok = write_or_check(main_path, render_skill_mdc(skill), check, dry_run) and ok
 
         for ref_path in walk_references(skill_dir):
@@ -188,7 +190,19 @@ def translate(repo_root: Path, output_dir: Path, dry_run: bool, check: bool) -> 
             joined = "-".join(to_kebab_case(s) for s in rel_segments)
             ref_filename = f"{plugin_kebab}-{skill_kebab}--{joined or ref_kebab}.mdc"
             ref_out = output_dir / ref_filename
+            expected_paths.add(ref_out)
             ok = write_or_check(ref_out, render_reference_mdc(ref), check, dry_run) and ok
+
+    # This prefix belongs to the generator; other project rules stay untouched.
+    for obsolete in sorted(set(output_dir.glob(f"{plugin_kebab}-*.mdc")) - expected_paths):
+        if check:
+            print(f"Obsolete: {obsolete}", file=sys.stderr)
+            ok = False
+        elif dry_run:
+            print(f"Would remove: {obsolete}")
+        else:
+            obsolete.unlink()
+            print(f"Removed: {obsolete}")
 
     return ok
 

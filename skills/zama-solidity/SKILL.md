@@ -1,60 +1,27 @@
 ---
 name: zama-solidity
-description: Write confidential Solidity smart contracts on Zama's FHEVM. Use when the user is writing, reviewing, or debugging encrypted Solidity — FHE types (euint64, ebool), ACL (FHE.allowThis/allow), FHE.select, ERC-7984 confidential tokens, ZamaEthereumConfig, `@fhevm/solidity`, `@openzeppelin/confidential-contracts`, Foundry or Hardhat setup for FHEVM, or any Solidity code that uses the FHE library. For protocol concepts and architecture, load the zama-protocol skill. For TypeScript SDK integration, load the zama-typescript skill.
+description: Write, review, or debug confidential Solidity on Zama FHEVM — FHE types/operations, ACL, ERC-7984, @fhevm/solidity, @openzeppelin/confidential-contracts, or Foundry/Hardhat setup. Also use for HCU cost/depth, ciphertext dependencies, escrow, auctions, RFQ, and batchers. Load zama-protocol first; use zama-typescript for SDK integration.
 license: BSD-3-Clause-Clear
 ---
 
-# Zama Solidity — Confidential Smart Contracts
+# Zama Solidity
 
-Encrypted Solidity on FHEVM. This skill covers contract patterns, FHE operations, ACL, ERC-7984 tokens, and project setup.
-
-**Before writing any code:** load the **zama-protocol** skill and read the universal gotchas — they cover the protocol-level bugs that apply to all FHEVM work (branching on encrypted values, ACL semantics, trivial encryption, HCU costs, decryption flow). What follows here is Solidity-specific.
-
----
-
-## References
-
-Load on demand — don't read them all up front.
+Load **zama-protocol** first for universal correctness/privacy rules. Keep this skill focused on contract decisions; read only the matching reference.
 
 | Task | Read |
 |------|------|
-| Config, encrypted types, FHE gotchas for contracts | `references/overview.md` |
-| Confidential token (encrypted ERC-20, hidden balances) | `references/erc7984.md` |
-| Hand-written FHE ops, manual ACL, production decryption | `references/fhe-advanced.md` |
-| Foundry project setup | `references/setups/foundry.md` *(default)* |
-| Hardhat project setup | `references/setups/hardhat.md` |
-| Verified contract addresses | `references/addresses.md` — **never guess addresses** |
+| Design, HCU/dependencies, deployed patterns | `references/code-map.md` |
+| Confidential tokens, wrappers, escrow | `references/erc7984.md` |
+| Raw FHE operations, ACL, public settlement | `references/fhe-advanced.md` |
+| Foundry / Hardhat setup | `references/setups/foundry.md` / `references/setups/hardhat.md` |
+| Deployment/configuration | **zama-protocol** → `references/addresses.md` |
 
----
+## Contract review priorities
 
-## Solidity-specific reminders
+- **Use OpenZeppelin ERC-7984 for token accounting.** Review the actual value movement in vault/escrow/payment code: encrypted assertions about an amount are not custody of tokens. Prefer the official deployed wrapper when it fits the application's requirements.
+- **Account for the transferred result.** Insufficient balance or receiver rejection can produce an encrypted zero transfer. Never credit the requested amount without validating what actually moved.
+- **Keep correctness through optimisation.** Preserve overflow bounds, rounding, refunds, cancellation and settlement stages. Client-computed deposits remain untrusted; reduced HCU alone is not a validated speedup.
+- **Store results with persistent ACL access.** Pass temporary cross-contract values with transient grants. Test subsequent transactions, zero-transfer paths and caller permissions on existing handles.
+- **Use production decryption proofs.** Local decrypt helpers are test-only. Freeze expected public-result handles, verify the ordered proof and prevent duplicate economic actions.
 
-These supplement the universal gotchas in the zama-protocol skill.
-
-- **Inherit `ZamaEthereumConfig` first.** It sets the FHEVM coprocessor addresses (`ACL`, `FHEVMExecutor`, `KMSVerifier`) per `block.chainid`. Without it, those addresses default to `address(0)` and every FHE op reverts the moment it tries to call them — with no revert reason, because the EVM is calling an empty account. Confusing to debug if you don't know to look for it.
-
-- **Use ERC-7984 for any confidential token.** Inherit from `@openzeppelin/confidential-contracts/token/ERC7984/ERC7984.sol` — never reimplement encrypted balances, allowances, or transfers. The audited version handles ACL, transient allowance handles, and the silent-zero-transfer semantics that hand-rolled versions routinely get wrong. See `references/erc7984.md`.
-
-- **Confidential-transfer / ERC-7984 check (review-time).** Whenever a contract accepts encrypted amounts (`externalEuint64`/`euint64`) and is named or described in value-moving terms — fund, vault, pool, escrow, payroll, subscription, auction settlement, payment — grep the repo for `IERC7984`, `confidentialTransfer`, and `@openzeppelin/confidential-contracts`. Three failure modes to catch:
-  - **No matches: the value leg is missing.** The contract looks like a confidential financial primitive but never actually moves value — it's an encrypted policy/attestation engine on top of an `externalEuint64` "amount." Either confirm the project explicitly documents this (e.g. README says "no token movement") and flag the disclosure, or raise it as a finding. It is easy to sign off on FHE plumbing while missing that the value leg is absent.
-  - **Custom `mapping(address => euint64) balances` plus hand-rolled transfer/allowance: reinvented ERC-7984.** Direct the author to inherit ERC-7984 from OpenZeppelin instead — same audited fix for ACL, transient allowances, and silent-zero semantics. See `references/erc7984.md`.
-  - **Custom confidential wrapper for a token that already has an official one.** If the contract is deploying its own `ERC7984ERC20Wrapper` (or hand-rolled equivalent) for USDC, USDT, WETH, ZAMA, etc., point the author at the deployed wrappers (`cUSDC`, `cUSDT`, `cWETH`, `cZAMA`) in `references/addresses.md`. Redeploying a private wrapper fragments the encrypted balance pool, breaks composability with other dApps using the official wrapper, and skips the audited Wrappers Registry — always check `references/addresses.md` before writing a wrapper.
-
-- **ACL after every state update.** `FHE.allowThis(handle)` for the contract, `FHE.allow(handle, user)` for decrypt access. ERC-7984 handles this internally; only hand-written FHE code needs it. For single-tx cross-contract handles, prefer `FHE.allowTransient` over persistent `FHE.allow`.
-
-- **`FHE.select` branches must be encrypted values.** Both arms must be the same encrypted type — materialise zeros with `FHE.asEuint64(0)`, not a literal `0`. Both branches always execute.
-
-- **Silent failures on insufficient balance.** FHE contracts transfer 0 via `FHE.select` — no revert. Test the zero-transfer case and call every function twice to prove ACL persistence.
-
-- **`via_ir` is a `solc` setting, not a build-tool requirement.** Both Foundry and Hardhat call the same compiler. The official templates (`fhevm-foundry-template`, `fhevm-hardhat-template`) compile FHE contracts without IR — start from them. If `solc` reports "stack too deep" on your own contracts, enable IR (`via_ir = true` in Foundry, `viaIR: true` in Hardhat). Don't enable it preemptively as a cargo-cult based on older Zama docs.
-
-- **`FHE.makePubliclyDecryptable(handle)` after every update** to a publicly-decryptable state variable.
-
-- **Decryption helpers are test-only.** `decrypt`, `userDecrypt`, etc. don't exist on production `FHE.sol`. Make decryption the last step — no conditional actions after.
-
-## Canonical sources
-
-- **FHEVM Solidity library:** https://github.com/zama-ai/fhevm
-- **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts
-- **HCU cost tables:** https://github.com/zama-ai/fhevm/blob/main/docs/solidity-guides/hcu.md
-- **Example contracts:** https://github.com/zama-ai/dapps/tree/main/packages/hardhat/contracts
+For supported overloads, consult the installed `FHE.sol` and [FHEVM API reference](https://docs.zama.org/protocol/solidity-guides/smart-contract/functions.md). Respect library/tooling peer dependencies and template pins; the newest package combination is not necessarily compatible.

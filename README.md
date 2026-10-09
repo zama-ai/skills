@@ -14,7 +14,7 @@ A plugin (id: `zama-protocol`, in the `zama-skills` marketplace) bundling three 
 | **zama-solidity**   | Encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup                 |
 | **zama-typescript** | TypeScript SDK — React, browser, Node.js, MV3, token flows, sessions                 |
 
-All three install together and route automatically by context — protocol questions load `zama-protocol`, Solidity work loads `zama-solidity`, TypeScript/SDK work loads `zama-typescript`.
+All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client integration to `zama-typescript`. Domain skills load the universal protocol rules first; references are read on demand. The Solidity code map links verified mainnet examples, while API/setup tutorials stay in their maintained public documentation.
 
 ## Install
 
@@ -59,6 +59,15 @@ ln -s ~/src/zama-skills/.cursor/rules/* /path/to/your-project/.cursor/rules/
 cp -r ~/src/zama-skills/.cursor/rules/. /path/to/your-project/.cursor/rules/
 ```
 
+Update either Cursor installation by updating the checkout and regenerating directly into the project's rules directory:
+
+```bash
+git -C ~/src/zama-skills pull --ff-only
+uv run ~/src/zama-skills/scripts/translate_for_cursor.py --output /path/to/your-project/.cursor/rules
+```
+
+The generator owns `zama-protocol-*.mdc` in the target directory. It removes obsolete rules and dangling symlinks from previous installs while preserving rules outside that prefix.
+
 ### Manual clone + symlink
 
 Works with any agent that reads global skills from `~/.agents/skills/`:
@@ -73,11 +82,7 @@ ln -s ~/src/zama-skills/skills/zama-typescript ~/.agents/skills/zama-typescript
 
 ### Replacing a previous install
 
-If you installed an earlier version through a different marketplace, remove it first:
-
-```bash
-/plugin marketplace remove zama-skills   # Claude Code
-```
+Update the existing installation through the same channel. When migrating from copied folders or another plugin, retire the old installation before enabling the replacement; same-name skills are not a merged source of truth. Keep backups outside skill-discovery directories. For Cursor, use the update command above to clean the project's rules directory; regeneration in the source checkout alone does not update copied rules.
 
 ## License
 
