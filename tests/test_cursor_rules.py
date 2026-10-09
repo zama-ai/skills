@@ -40,13 +40,28 @@ class RemovedReferenceTests(unittest.TestCase):
         self.assertFalse(self.run_generator(check=True))
         self.assertEqual(before, {p.name: p.read_text() for p in self.output.iterdir()})
 
-    def test_generation_removes_obsolete_rule_and_preserves_unrelated_rules(self):
+    def test_generation_removes_obsolete_rule_and_preserves_project_rules(self):
         unrelated = self.output / "project-style.mdc"
-        unrelated.write_text("Project rules\n")
+        same_prefix = self.output / "zama-protocol-team-notes.mdc"
+        for rule in (unrelated, same_prefix):
+            rule.write_text("Project rules\n")
         self.assertTrue(self.run_generator())
         self.assertFalse(self.obsolete.exists())
-        self.assertEqual("Project rules\n", unrelated.read_text())
+        for rule in (unrelated, same_prefix):
+            self.assertEqual("Project rules\n", rule.read_text())
         self.assertTrue(self.run_generator(check=True))
+
+    def test_generation_replaces_symlinked_rules_without_touching_their_target(self):
+        rule = self.output / "zama-protocol-example.mdc"
+        target = self.root / "other-checkout.mdc"
+        target.write_text(rule.read_text())
+        rule.unlink()
+        rule.symlink_to(target)
+        (self.output / "zama-protocol-example--dangling.mdc").symlink_to(self.root / "missing.mdc")
+        self.assertTrue(self.run_generator())
+        self.assertFalse(rule.is_symlink())
+        self.assertEqual(target.read_text(), rule.read_text())
+        self.assertFalse((self.output / "zama-protocol-example--dangling.mdc").is_symlink())
 
     def test_dry_run_preserves_obsolete_rule(self):
         before = self.obsolete.read_text()
