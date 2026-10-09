@@ -23,12 +23,12 @@ App code imports `@zama-fhe/sdk`, plus `@zama-fhe/react-sdk` for React.
 The SDK API changes between releases, so check every call before writing it.
 
 1. Read the installed version in `node_modules/@zama-fhe/sdk/package.json`.
-2. Open the SDK's generated index for that version: `https://raw.githubusercontent.com/zama-ai/sdk/v<version>/llms.txt`. It lists the official docs, API reference and examples. Its links point at `main`. Replace `main` with `v<version>` to stay on your release.
+2. Open the SDK's generated index for that version: `https://raw.githubusercontent.com/zama-ai/sdk/v<version>/llms.txt`. It lists the official docs, API reference and examples. Its links point at `main`. Replace `main` with `v<version>` to stay on your release. Older releases have no index: upgrade the SDK, or use the [SDK docs](https://docs.zama.org/protocol/sdk).
 3. Check exact signatures in the installed type declarations under `node_modules/@zama-fhe/sdk/dist` and `node_modules/@zama-fhe/react-sdk/dist`.
 
 ## Start from an official example
 
-Each example in [zama-ai/sdk `examples/`](https://github.com/zama-ai/sdk/tree/main/examples) has a `WALKTHROUGH.md`. Open the one for your stack at your version's tag.
+The official examples live in [zama-ai/sdk `examples/`](https://github.com/zama-ai/sdk/tree/main/examples). Open the one for your stack at your version's tag and read its `WALKTHROUGH.md`, or its `README.md` when it has no walkthrough.
 
 | Building | Example |
 |----------|---------|

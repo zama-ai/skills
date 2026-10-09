@@ -26,3 +26,5 @@ If a later update changes a value that must still be public, mark the new handle
 ## Tests are not production
 
 Mock environments compute in cleartext. They check logic and access, not real ciphertext computation, latency or cost. Their decrypt helpers exist only in tests. Production contracts never get an immediate plaintext.
+
+Test the paths mocks make easy to skip: a transfer that moves zero, access to stored handles in a later transaction, and a reveal with a forged value or a replayed proof.

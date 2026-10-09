@@ -48,20 +48,10 @@ Codex reads `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json` f
 
 ### Cursor
 
-Cursor rules live under `.cursor/rules/` — one `.mdc` per skill plus one per reference (e.g. `zama-protocol-zama-solidity--erc7984.mdc`). Two options:
+Cursor rules live under `.cursor/rules/`: one `.mdc` per skill plus one per reference (e.g. `zama-protocol-zama-solidity--erc7984.mdc`). Clone the repository once, then generate the rules into your project. Run the same commands to update:
 
 ```bash
-# Option A — clone into your project and point Cursor at the rules:
-git clone https://github.com/zama-ai/skills.git ~/src/zama-skills
-ln -s ~/src/zama-skills/.cursor/rules/* /path/to/your-project/.cursor/rules/
-
-# Option B — copy the rules into your project:
-cp -r ~/src/zama-skills/.cursor/rules/. /path/to/your-project/.cursor/rules/
-```
-
-Update either Cursor installation by updating the checkout and regenerating directly into the project's rules directory:
-
-```bash
+git clone https://github.com/zama-ai/skills.git ~/src/zama-skills   # first time only
 git -C ~/src/zama-skills pull --ff-only
 uv run ~/src/zama-skills/scripts/translate_for_cursor.py --output /path/to/your-project/.cursor/rules
 ```
@@ -82,7 +72,7 @@ ln -s ~/src/zama-skills/skills/zama-typescript ~/.agents/skills/zama-typescript
 
 ### Replacing a previous install
 
-Update the existing installation through the same channel. When migrating from copied folders or another plugin, retire the old installation before enabling the replacement; same-name skills are not a merged source of truth. Keep backups outside skill-discovery directories. For Cursor, use the update command above to clean the project's rules directory; regeneration in the source checkout alone does not update copied rules.
+Update the existing installation through the same channel. When migrating from copied folders or another plugin, retire the old installation before enabling the replacement: same-name skills are not a merged source of truth. Keep backups outside skill-discovery directories.
 
 ## License
 

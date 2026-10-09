@@ -2,14 +2,14 @@
 
 ## Principles
 
-- **Keep the critical path short.** Latency follows the longest chain of FHE operations that depend on each other, including those inside token transfers. Count them per transaction and check the [HCU table](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu).
+- **Keep the critical path short.** Latency follows the longest chain of dependent FHE operations (see **zama-protocol** → `references/concepts.md`).
 - **Avoid shared encrypted state.** One encrypted balance or total that every user touches links their transactions. Per-user or per-wallet state keeps them independent.
-- **Pick cheap operations.** Use the smallest type that fits and plaintext operands for public values. Shifts can replace multiplication and division by powers of two. Keep ranges and rounding correct.
-- **Keep the economics intact.** Credit transferred amounts, treat client-computed values as untrusted, and keep refunds, cancellation and settlement stages working after any optimization.
+- **Pick cheap operations.** Shifts can replace multiplication and division by powers of two. Keep ranges and rounding correct.
+- **Keep the economics intact.** Treat client-computed values as untrusted, and keep refunds, cancellation and settlement stages working after any optimization.
 
 ## Deployed examples
 
-Read verified source on Etherscan. Look up current addresses by name in the registry (**zama-protocol** → `references/addresses.md`). For a proxy, read its current implementation and linked libraries.
+Read verified source on Etherscan. The first two rows are fixed deployments that the registry does not track. Look up the others by name in the registry (**zama-protocol** → `references/addresses.md`). For a proxy, read its current implementation and linked libraries.
 
 | Pattern | Contract | Start with |
 |---------|----------|------------|

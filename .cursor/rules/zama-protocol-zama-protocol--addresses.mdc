@@ -16,6 +16,6 @@ The public [protocol registry](https://github.com/zama-ai/protocol-registry) is 
 
 Never invent or recall an address. Take it from the registry, then check the code on the chain's explorer. For a proxy, check its current implementation.
 
-- **Contracts do not hard-code FHEVM addresses.** They inherit the chain's `ZamaConfig` contract (see **zama-solidity**).
-- **Wrappers are separate tokens.** An ERC-7984 wrapper and its underlying ERC-20 have different addresses and can have different units. Read `decimals()` and `rate()` from the wrapper.
+- **Contracts do not hard-code FHEVM addresses.** They inherit the config contract for their chain, such as `ZamaEthereumConfig` (see **zama-solidity**).
+- **Wrappers are separate tokens.** An ERC-7984 wrapper and its underlying ERC-20 have different addresses.
 - **A chain preset is not a deployment.** An SDK or library preset for a chain does not prove the protocol runs there. The registry and the [changelog](https://docs.zama.org/protocol/changelog) do.

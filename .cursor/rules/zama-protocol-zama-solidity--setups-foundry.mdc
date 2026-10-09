@@ -9,8 +9,6 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 
 # Foundry
 
-Use `@fhevm/forge`, the FHEVM companion to `forge-std`: tests inherit `TestFhevm` instead of `Test`. Its source and README live in [fhevm-mocks](https://github.com/zama-ai/fhevm-mocks) under `foundry/`. Use the `release/*` branch that matches the protocol version you target, and follow the README for dependencies, remappings and execution modes. The older standalone `forge-fhevm` template uses a different setup. Do not mix the two.
+Use `@fhevm/forge`, the FHEVM companion to `forge-std`: tests inherit `TestFhevm` instead of `Test`. Its README is the reference for the version you install: run `npm view @fhevm/forge@<version> readme`, or open `node_modules/@fhevm/forge/README.md`. It covers dependencies, remappings, execution modes and fork limits. The older standalone `forge-fhevm` template uses a different setup. Do not mix the two.
 
-- Tests run in cleartext. Forks do not know plaintexts computed outside the test. Check the README's fork-mode limits.
-- Test transferred amounts, overflow and rounding, access in later transactions, and replayed or forged reveals.
-- Add `fs_permissions` only for files the setup actually writes. `via_ir` is not an FHEVM requirement.
+Add `fs_permissions` only for files the setup actually writes. `via_ir` is not an FHEVM requirement.
