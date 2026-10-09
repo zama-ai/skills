@@ -9,10 +9,18 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 
 # Hardhat
 
-For new projects, use [@fhevm/hardhat-plugin-v3](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/hardhat/v3/plugin/pkg) with Hardhat 3. Select tooling compatible with the deployed protocol; verify registry tags and peer dependencies rather than following an old README prerelease banner.
+Use Hardhat 3 with `@fhevm/hardhat-plugin-v3`. Its source, README and example project live in [fhevm-mocks](https://github.com/zama-ai/fhevm-mocks) under `hardhat/v3/`. Use the `release/*` branch that matches the protocol version you target. Copy dependency versions from the example project's `package.json`, and register the plugin in `plugins` in `hardhat.config.ts`.
 
-Use the public [Hardhat 3 example project](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/hardhat/v3/fhevm-hardhat-template/pkg) as a model, not a ready-made standalone template. Register the plugin through Hardhat 3's `plugins` configuration and consult its published API for input/decrypt helpers.
+When peer dependency ranges conflict (for example, the OpenZeppelin confidential contracts pinning a different `@fhevm/solidity`), add an explicit override instead of installing with `--legacy-peer-deps`, which also skips Hardhat's own peer packages:
 
-The older `@fhevm/hardhat-plugin` and standalone Hardhat 2 template are legacy paths. Preserve existing compatible pins while planning migration; their helper/result shapes are not automatically interchangeable with the high-level Zama SDK.
+```json
+"overrides": {
+  "@openzeppelin/confidential-contracts": { "@fhevm/solidity": "$@fhevm/solidity" }
+}
+```
 
-Test transferred amounts and ACL persistence. Cleartext mocks do not validate production ciphertext computation, readiness or throughput.
+Then compile and run the tests. Passing mock tests do not prove the combination is supported on a live network. Check the release notes.
+
+The plugin provides helpers to encrypt test inputs and decrypt results, including `decryptPublic*WithSignatures` for testing reveals. Test the zero-transfer path, access in later transactions, and replayed or forged reveals.
+
+`@fhevm/hardhat-plugin` for Hardhat 2 is the legacy path.

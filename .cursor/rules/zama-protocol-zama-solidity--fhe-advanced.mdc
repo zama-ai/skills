@@ -7,14 +7,22 @@ alwaysApply: false
 
 _Reference for zama-solidity skill (zama-protocol plugin)_
 
-# Raw FHE and Public Settlement
+# Reveals, Operation Limits and Tests
 
-Use the installed [FHE.sol](https://github.com/zama-ai/fhevm/blob/main/library-solidity/lib/FHE.sol) and [API docs](https://docs.zama.org/protocol/solidity-guides/smart-contract/functions.md) for supported types and overloads. Repository `main` may be ahead of the published package.
+## Public reveals, end to end
 
-- **Persist only what survives the transaction.** New result handles need `FHE.allowThis` for later contract use and `FHE.allow` for intended users. Use `FHE.allowTransient` for same-transaction forwarding. Accepting an existing handle requires checking the caller's permission too.
-- **Preserve encrypted control flow.** `FHE.select` takes matching encrypted types; both arguments are computed. Arithmetic wraps, narrowing truncates, and shifts reduce the shift count modulo the bit width. Preserve explicit range/overflow and rounding rules.
-- **Check the operation set.** `eaddress` is an encrypted address type, not a general arithmetic integer. `euint256` does not support the full smaller-integer arithmetic set. Array `sum`/`isIn` overloads exist in published 0.13.4; check installed-version support and release costs before replacing loops.
-- **Public decryption is a staged flow.** Mark the intended handles with `FHE.makePubliclyDecryptable`, request public decryption offchain, then verify the proof with `FHE.checkSignatures` against the frozen expected handles in order. Advance the application stage once; never accept caller-selected handles as settlement evidence. Re-mark new handles after state updates when disclosure is still intended.
-- **Tests and production differ.** `FHE.decrypt` is not a production API. Functional mocks validate logic and permissions; they do not establish ciphertext readiness or load capacity.
+1. **Contract:** call `FHE.makePubliclyDecryptable` on the handles to reveal, store them, and move to a reveal stage.
+2. **Off-chain:** fetch the clear values and the decryption proof with `@zama-fhe/sdk` public decryption. In Hardhat tests, the plugin's `decryptPublic*WithSignatures` helpers return the same values and proof.
+3. **Contract:** call `FHE.checkSignatures(handles, abi.encode(values), proof)` with the stored handles, and values in the same order. Advance the stage so settlement runs once.
 
-Read the [public-decryption guide](https://docs.zama.org/protocol/solidity-guides/smart-contract/oracle.md) and `code-map.md` for verified settlement examples. Decryption may lead to economic actions after proof verification; revealing a value is a privacy decision.
+If a later update changes a value that must still be public, mark the new handle again. The [public decryption guide](https://docs.zama.org/protocol/solidity-guides/smart-contract/oracle.md) explains the contract side. Its client code uses the deprecated `relayer-sdk`, so take client calls from `@zama-fhe/sdk` instead.
+
+## Operation limits
+
+- `eaddress` supports equality and selection, not arithmetic. `euint256` supports fewer arithmetic operations than smaller types.
+- Shifts: up to protocol v0.14, an amount at or above the bit width wraps modulo the width. From v0.15 it returns zero. Rotations always wrap. If an amount can reach the width, reduce it yourself so the code behaves the same on both.
+- Array helpers such as `FHE.sum` and `FHE.isIn` exist only in recent library versions. Check the installed `FHE.sol` and their HCU cost before replacing a loop.
+
+## Tests are not production
+
+Mock environments compute in cleartext. They check logic and access, not real ciphertext computation, latency or cost. Their decrypt helpers exist only in tests. Production contracts never get an immediate plaintext.

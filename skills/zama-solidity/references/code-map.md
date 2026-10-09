@@ -1,17 +1,21 @@
-# Good FHEVM Code: Principles and Sources
+# Design, Cost, and Deployed Apps to Learn From
 
-- **Budget work and dependencies.** Count nested token operations and the weighted critical path. Transaction HCU caps do not guarantee throughput; measure ciphertext completion, not mock gas. Use the [release cost table](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu).
-- **Avoid unnecessary shared chains.** Encrypted balances and accumulators link transactions. Wallet pools partition recipient balances; shared source balances and global aggregates remain.
-- **Choose operations deliberately.** Use the smallest supported type that fits and scalar operands already public. Shifts suit power-of-two formulas; preserve ranges and rounding. `div`/`rem` require plaintext divisors. Packing is not automatically cheaper.
-- **Preserve economics and privacy.** Validate actual ERC-7984 transferred amounts. Client-computed fields remain untrusted. Keep required ACL grants; use transient grants for single-transaction calls. Public settlement requires proofs bound to expected handles and replay protection.
+## Principles
 
-## Read deployed examples
+- **Keep the critical path short.** Latency follows the longest chain of FHE operations that depend on each other, including those inside token transfers. Count them per transaction and check the [HCU table](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu).
+- **Avoid shared encrypted state.** One encrypted balance or total that every user touches links their transactions. Per-user or per-wallet state keeps them independent.
+- **Pick cheap operations.** Use the smallest type that fits and plaintext operands for public values. Shifts can replace multiplication and division by powers of two. Keep ranges and rounding correct.
+- **Keep the economics intact.** Credit transferred amounts, treat client-computed values as untrusted, and keep refunds, cancellation and settlement stages working after any optimization.
 
-| Pattern | Verified Ethereum mainnet source | Start here |
-|---------|----------------------------------|------------|
-| Auction payment checks and allocation | [AuctionToken](https://etherscan.io/address/0x04a5b8C32f9c38092B008A4939f1F91D550C4345#code) | `AuctionToken.sol`: `submitEncryptedBid`, `_computeBidAllocation`; scalar multiplication, returned-payment checks, public-denominator division. |
-| Partitioned custody and clone configuration | [WalletFactory](https://etherscan.io/address/0xBf58EE954CaeeF84B44F30131421e606272E393F#code) | `WalletFactory.sol`, `AuctionWallet.sol`: wallet assignment and `initialize`. |
-| RFQ lifecycle and cheaper fee formula | [Proxy](https://etherscan.io/address/0x2827Eed03e8b8005bDf0E2e5901e062a27b7cE67#code) → [ConfidentialSwap implementation](https://etherscan.io/address/0xD7b3bD880CDc15a5Ea15921aE5104b33Ee5Ae69b#code) | `IntentLifecycleLib.sol`, `EscrowLib.sol`, `FeeLib.takeFee`: partitioned escrow and power-of-two fees; shift 64 needs separate handling for `euint64`. |
-| Aggregate reveal and encrypted claims | [Deposit batcher](https://etherscan.io/address/0x324EA89FD3784036673BfE6Ffee2334A088F40Cc#code) / [redeem batcher](https://etherscan.io/address/0x96Cd3Faa7483783Ac2Eb715f6333361500F1eec9#code) | `VaultBatcherConfidential.sol` and bundled OpenZeppelin `BatcherConfidential.sol`: `_join`, `dispatchBatchCallback`, `_claim`; shared totals, proof verification, cancellation, and rounding. Small batches can expose individual amounts. |
+## Deployed examples
 
-Checked 2026-10-09. Include application code only when Etherscan verifies its mainnet deployment; private repositories and testnet verification do not qualify. Follow proxies to their current verified implementation and linked libraries. Verification is not an audit. Read relevant functions and their callees; preserve economic/privacy constraints and check installed API versions before adapting them.
+Read verified source on Etherscan. Look up current addresses by name in the registry (**zama-protocol** → `references/addresses.md`). For a proxy, read its current implementation and linked libraries.
+
+| Pattern | Contract | Start with |
+|---------|----------|------------|
+| Sealed bids paid in ERC-7984 | [AuctionToken](https://etherscan.io/address/0x04a5b8C32f9c38092B008A4939f1F91D550C4345#code) | `submitEncryptedBid`, `_computeBidAllocation`: payment checks on transferred amounts, division by a public denominator |
+| Per-user wallets created as clones | [WalletFactory](https://etherscan.io/address/0xBf58EE954CaeeF84B44F30131421e606272E393F#code) | `WalletFactory`, `AuctionWallet.initialize`: partitioned custody, configuring FHE in a clone |
+| Swap with escrow and fees | Registry entry `CONFIDENTIAL_SWAP` (Ethereum) | `IntentLifecycleLib`, `EscrowLib`, `FeeLib.takeFee`: partitioned escrow, a fee computed with a shift, and why a shift of 64 needs its own case |
+| Batched deposits with an aggregate reveal | Registry entries of type `vault_batcher` (Ethereum) | `VaultBatcherConfidential`, OpenZeppelin `BatcherConfidential`: `_join`, `dispatchBatchCallback`, `_claim`, proof checks and rounding. Small batches expose individual amounts |
+
+Verified source is not an audit. Read the callers and callees of any function you adapt, and check the installed API before reusing code.

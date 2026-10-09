@@ -13,25 +13,24 @@ A Claude Code plugin (id: `zama-protocol`, marketplace: `zama-skills`) bundling 
 
 | Skill | When to use |
 |-------|-------------|
-| `zama-protocol` | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
-| `zama-solidity` | Writing/reviewing encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup |
-| `zama-typescript` | TypeScript SDK integration — React, browser, Node.js, MV3, sessions, token flows |
+| `zama-protocol` | The FHEVM model shared by contracts and clients, package choice, planning, deployed addresses |
+| `zama-solidity` | Writing/reviewing encrypted Solidity — contract rules with examples, ERC-7984, reveals, deployed apps, Hardhat/Foundry |
+| `zama-typescript` | Clients with `@zama-fhe/sdk` — version-matched docs and examples, rules that hold across releases |
 
 ## Structure
 
 ```
 .claude-plugin/                  # Plugin metadata; version source
 skills/
-  zama-protocol/                # Universal rules, concepts, deployment discovery
-  zama-solidity/                # Contract decisions, verified code map, setup pointers
-  zama-typescript/              # SDK router and integration pitfalls
+  zama-protocol/                # Shared model, packages, planning, protocol registry
+  zama-solidity/                # Contract rules, ERC-7984, reveals, deployed apps, setup
+  zama-typescript/              # SDK discovery, official examples, client rules
 .cursor/rules/                  # Generated; removed references remove their rules
 .codex-plugin/                  # Generated
 .agents/plugins/                # Generated marketplace
 scripts/                        # Artifact generators
-tests/                         # Generator regression checks
+tests/                          # Generator regression checks
 ```
-
 
 ## Key Rules
 
@@ -39,15 +38,21 @@ tests/                         # Generator regression checks
 
 **Skills teach corrections, not tutorials.** Every line must either fill a verified LLM blind spot or teach an essential concept. If a stock LLM already gets it right AND humans don't need it explained, cut it.
 
-**Link to living code, don't embed it.** Code in a skill file can't be tested or linted and goes stale. Point to:
+**Write for a first read.** One rule per heading, in plain words, with the reason in a sentence. Agents load SKILL.md on every task; put everything else in a reference the SKILL.md routes to.
+
+**Link to maintained sources; embed little code.** Embedded code goes stale. Point to:
 - [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — ERC-7984, token patterns
-- The Solidity code map — Etherscan-verified Ethereum mainnet application sources
+- [Protocol registry](https://github.com/zama-ai/protocol-registry) — deployed addresses
+- The SDK's version-tagged `llms.txt` and official `examples/` — client code
+- The Solidity code map — Etherscan-verified mainnet application sources
+
+Embed only short Solidity examples for rules agents get wrong, and compile them against the published packages before merging. Do not embed SDK code: its API changes between releases.
 
 **Use ERC-7984** for any confidential token work. Never reimplement encrypted balances, allowances, or transfers.
 
-**Never publish private code or links.** Private apps may inform investigation, but distributed advice must be independently supported by public APIs/docs. Application code pointers must lead to verified mainnet Etherscan source, including current proxy implementations.
+**Publish only public, verifiable content.** No private code, private links, internal discussions or people's names. Every statement must be supported by public docs, published packages or verified on-chain source. Application code pointers lead to Etherscan-verified mainnet source, including current proxy implementations.
 
-**No duplication across skills.** Universal gotchas live in zama-protocol. Domain skills carry only domain-specific reminders and cross-reference zama-protocol for the full set.
+**No duplication across skills.** zama-protocol holds the model shared by contracts and clients. zama-solidity holds contract rules; zama-typescript holds client rules. Both load zama-protocol first.
 
 ## Editing
 
@@ -57,14 +62,14 @@ tests/                         # Generator regression checks
 ### Before adding content
 
 1. Check official docs: https://docs.zama.org
-2. Verify the API against the latest packages.
+2. Verify the API against the published packages.
 3. For new advice, test with a stock LLM — does it actually get this wrong?
 4. If the LLM already knows it AND humans don't need it explained, don't add it.
 
 ## References
 
 - **Zama Docs:** https://docs.zama.org
-- **Protocol addresses:** https://docs.zama.org/protocol/protocol-apps/addresses
+- **Protocol addresses:** https://github.com/zama-ai/protocol-registry
 - **FHEVM Solidity:** https://github.com/zama-ai/fhevm
 - **SDK:** https://github.com/zama-ai/sdk
 - **OpenZeppelin Confidential Contracts:** https://github.com/OpenZeppelin/openzeppelin-confidential-contracts

@@ -1,28 +1,47 @@
 ---
 name: zama-protocol
-description: Explain or plan Zama FHEVM applications, protocol architecture, encrypted state, ACL, handles, HCU, decryption, or deployment selection. Load first for Zama encrypted Solidity or TypeScript work; use zama-solidity for contracts and zama-typescript for SDK integration.
+description: Explain or plan Zama FHEVM applications — encrypted state, handles, access control (ACL), decryption, costs, package choice and deployed addresses. Load first for any Zama Solidity or TypeScript work, then load zama-solidity for contracts or zama-typescript for client code.
 license: BSD-3-Clause-Clear
 ---
 
 # Zama Protocol
 
-Load the companion skill for implementation. Read `references/concepts.md` for architecture/privacy planning and `references/addresses.md` for deployment discovery; load only what the task needs.
+FHEVM lets smart contracts compute on encrypted values. Load this skill first, then **zama-solidity** for contracts or **zama-typescript** for client code. Open a reference only when the task needs it:
 
-## Universal corrections
+- `references/concepts.md`: deciding what to encrypt, what still leaks, cost and latency.
+- `references/addresses.md`: finding deployed protocol and app contracts.
 
-- **FHE computations are symbolic onchain.** Contracts return ciphertext handles; coprocessors compute asynchronously. A successful receipt does not establish ciphertext readiness.
-- **Handles are identifiers.** Different handles can encrypt equal values. Use FHE comparisons for secrets; never infer plaintext from handle bytes or reuse handles across chains.
-- **Keep permissions with the value.** Persist contract access with `FHE.allowThis` for stored results; grant users access only when intended. Transient grants expire after the transaction. Imported inputs do not grant persistent access automatically.
-- **Import at the proof's target.** Input proofs bind to a contract and sender. After `FHE.fromExternal`, forward handles with ACL permission; each contract hop does not require re-encryption. When accepting existing handles, verify caller permission as well as contract access.
-- **Encrypted conditions cannot control Solidity branching.** Use `FHE.select`; both arms are computed. Reverts/events tied to revealed secrets change privacy.
-- **Trivial encryption exposes its input.** `FHE.asEuintN(plaintext)` does not make a public amount private. Prefer client-encrypted inputs for secrets.
-- **Check type support and costs.** ERC-7984 balances are `euint64`; wider types have different operation sets. `div`/`rem` need plaintext divisors; bounded randomness needs a power-of-two bound.
-- **Decryption is asynchronous.** Keep intermediates encrypted. Public settlement must verify proofs against expected frozen handles and prevent replay. User decryption requires the relevant contract/user ACL permissions; a signed permit alone does not grant them.
-- **Metadata remains public.** Standard ERC-7984 events include handles. Addresses, timing, public deposits/withdrawals and reveal granularity can expose information without exposing ciphertext plaintexts directly.
-- **Configure each FHE-calling contract.** Use the installed library's chain-appropriate config. Proxy/clone storage needs explicit configuration in its protected initialiser.
+## Use the maintained packages
 
-## Sources and version discipline
+- Contracts: `@fhevm/solidity` for the `FHE` library and `@openzeppelin/confidential-contracts` for ERC-7984 confidential tokens.
+- Client code: `@zama-fhe/sdk`, plus `@zama-fhe/react-sdk` for React. Do not import `@fhevm/sdk` (the SDK's internal backend) or `@zama-fhe/relayer-sdk` (deprecated).
 
-Use the [protocol changelog](https://docs.zama.org/protocol/changelog) and current deployment docs for live status. Public repository `main`, npm `latest`, and the deployed protocol can differ. Contract `getVersion()` numbers also differ from protocol release tags. Verify the project's installed versions and peer dependencies before selecting APIs; do not copy release-specific event/handle/relayer schemas from memory.
+## How FHEVM works
 
-Read public [Solidity docs](https://docs.zama.org/protocol/solidity-guides) or [SDK docs](https://docs.zama.org/protocol/sdk) for the task. Private app code and links must never enter distributed skills; the Solidity code map contains Etherscan-verified mainnet examples.
+### Encrypted values are handles, computed later
+
+Contracts store 32-byte handles that point to ciphertexts. Coprocessors compute the ciphertexts off-chain after the transaction. A mined receipt does not mean a result can be decrypted yet, and handle bytes say nothing about the value: two different handles can hold the same number.
+
+### An encrypted input belongs to one contract and one user
+
+The client encrypts a value for a specific contract and sender. That contract imports it with `FHE.fromExternal`. Other contracts receive the resulting handle, never the original proof.
+
+### Access is granted explicitly
+
+Every handle has an access list. A contract grants itself access to keep using a stored value, grants a user access to values that user may decrypt, and grants another contract temporary access before passing it a handle. A user can decrypt only when both the user and the contract are on the list. A signed permit adds no one.
+
+### Encrypted conditions cannot steer control flow
+
+`if`, `require` and `revert` cannot see encrypted values. Compute both outcomes and choose with `FHE.select`. A revert or event that depends on a revealed secret leaks that secret.
+
+### Decryption is asynchronous and proven
+
+Users decrypt their own values off-chain through the SDK. To use a plaintext on-chain, the contract marks the handle publicly decryptable, someone fetches the value with a KMS proof off-chain, and the contract verifies that proof against the handle it stored.
+
+### Values are private, metadata is not
+
+Addresses, timing, which functions run, plaintext deposits and withdrawals, and event contents are public. A plaintext passed to `FHE.asEuint64` (and similar) is public too, so secrets must come from the client already encrypted. Aggregates over a few users can reveal each of them.
+
+## Check before you rely on a version
+
+Packages, protocol releases and deployments change. Read the installed package versions and the [protocol changelog](https://docs.zama.org/protocol/changelog) before using a version-specific behavior, and look up addresses instead of recalling them.

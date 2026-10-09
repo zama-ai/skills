@@ -1,23 +1,24 @@
-# Protocol Planning
+# Planning a Confidential App
 
-## Execution model
+## Decide what must stay secret
 
-Host-chain contracts validate FHE calls, permissions and compute budgets and return handles. Coprocessors materialise ciphertext results offchain. The Gateway coordinates protocol requests and responses; the KMS uses threshold cryptography for authorised decryption. Applications normally use the SDK/Relayer for input verification and decryption, while sending application transactions to the host chain.
+List each value, who may read it, and what becomes public at the end. Use FHE when contracts must keep computing on a secret across transactions. A public computation needs no FHE, and proving a single fact once may suit a zero-knowledge proof better.
 
-Do not describe FHE as plaintext execution inside every host-chain validator, or decryption as an immediate getter. For current architecture, use the [protocol litepaper](https://docs.zama.org/protocol/zama-protocol-litepaper); resolve exact implementation details against the deployed release rather than copying event schemas or database layouts.
+Reveal only what settlement needs. An auction can reveal the winner's address and pay the seller confidentially, so the price never becomes public.
 
-## Choose the privacy boundary
+## Account for what still leaks
 
-Identify which values must remain secret, who may decrypt them, and what may be revealed at settlement. Plaintext token deposits/withdrawals remain observable. Public aggregates can expose individuals in small batches. Assess participant addresses, timing and linkage alongside amount privacy.
+- Plaintext deposits and withdrawals show amounts at the edges of the system.
+- Participant addresses, timing and call patterns link activity.
+- An aggregate over a few users can expose each of them.
+- A shared encrypted balance or counter links every transaction that touches it.
 
-Use FHE for continuing computation over secrets. A public computation needs no FHE; a one-time proof may suit ZK instead. Heavy encrypted workloads need cost and latency measurements.
+## Budget cost and latency
 
-## Budget the full flow
+The host chain meters FHE work in HCU, with a cap per transaction. The cap limits one transaction. It does not promise throughput. Count every FHE operation, including those inside token transfers, and the longest chain of operations that depend on each other: that chain sets latency. Costs per operation are in the [HCU table](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu). Mock gas says nothing about coprocessor latency. Measure on a real network.
 
-Include nested ERC-7984 operations, weighted dependency depth and shared state across transactions. Per-transaction HCU caps are not a throughput guarantee. Use release-matched [HCU tables](https://docs.zama.org/protocol/solidity-guides/development-guide/hcu) and the **zama-solidity** code map; do not convert mock gas into coprocessor latency.
+## How the pieces fit
 
-## Verify deployment and access
+Host-chain contracts check permissions and record handles. Coprocessors compute ciphertexts off-chain. The Gateway coordinates requests, and the KMS decrypts with threshold cryptography only for authorized parties. Apps reach input verification and decryption through the SDK and its relayer. Details are in the [protocol litepaper](https://docs.zama.org/protocol/zama-protocol-litepaper).
 
-Read [deployed addresses](https://docs.zama.org/protocol/protocol-apps/addresses) and the [protocol changelog](https://docs.zama.org/protocol/changelog) for the target chain. An SDK preset or library configuration is not proof that the full protocol is live there. Do not publish fixed chain-support timelines or assume every network is free.
-
-Check current [Relayer API-key guidance](https://docs.zama.org/protocol/sdk/guides/relayer-api-keys.md) for access and billing. Keep service credentials server-side. Distinguish host gas, protocol fees and hosted-service charges.
+Relayer access and billing are described in the [relayer API key guide](https://docs.zama.org/protocol/sdk/guides/relayer-api-keys.md). Keep keys on a server. Host gas, protocol fees and hosted-service charges are separate costs.

@@ -1,33 +1,51 @@
 ---
-description: Build, review, or debug Zama FHEVM TypeScript/JavaScript integration — @zama-fhe/sdk, @zama-fhe/react-sdk, encryption/decryption, ERC-7984 tokens, permits/operators, wagmi/viem/ethers, browser or Node services, and async wallet/transaction flows. Load zama-protocol first; use zama-solidity for contracts.
+description: Build, review, or debug TypeScript or JavaScript clients for Zama FHEVM with @zama-fhe/sdk and @zama-fhe/react-sdk — encrypting inputs, decrypting results, permits, ERC-7984 tokens (shield, unshield, transfer), operators, wagmi/viem/ethers, browser apps and Node services. Load zama-protocol first; use zama-solidity for contracts.
 alwaysApply: false
 ---
 
 # zama-typescript
 
+_zama-typescript skill (zama-protocol plugin)_
+
 # Zama TypeScript
 
-Load **zama-protocol** first. Use `references/patterns.md` for integration pitfalls and the matching public docs below for exact signatures; do not copy whole SDK tutorials into this skill.
+Load **zama-protocol** first. Open `references/patterns.md` for Node services, unshielding, delegated decryption and resource cleanup.
 
-## Select the package and release
+## Use only the high-level SDK
 
-Use `@zama-fhe/sdk` for core integration and `@zama-fhe/react-sdk` for React; respect their peer dependencies. `@fhevm/sdk` is a published low-level backend. The high-level SDK pins its compatible backend: do not independently replace it with npm `latest`.
+App code imports `@zama-fhe/sdk`, plus `@zama-fhe/react-sdk` for React.
 
-`@zama-fhe/relayer-sdk` is deprecated. The [protocol changelog](https://docs.zama.org/protocol/changelog) records security-only maintenance until 2026-11-06, then no support. Use it only while maintaining/migrating existing integrations or compatible pinned tooling.
+- Do not import `@fhevm/sdk`. It is the SDK's internal backend, and the SDK pins the matching version. Hardhat test tooling may still need it installed.
+- Do not use `@zama-fhe/relayer-sdk`. It is deprecated. Code that calls `createInstance()` comes from it. Migrate such code to `@zama-fhe/sdk`.
 
-Check the project's installed package declarations and release channel before using a documented feature. Hosted docs and repository `main` may describe a newer release than the project uses.
+## Work from the installed release, not from memory
 
-## Route by task
+The SDK API changes between releases, so check every call before writing it.
 
-| Task | Public source |
-|------|---------------|
-| Setup, signer/provider, transports/storage | [Quick start](https://docs.zama.org/protocol/sdk/getting-started/quick-start.md), [configuration](https://docs.zama.org/protocol/sdk/guides/configuration.md) |
-| Tokens, wrappers, shield/unshield | [Core SDK API](https://docs.zama.org/protocol/sdk/api-references/sdk.md) |
-| React/wagmi hooks and query behavior | [React API](https://docs.zama.org/protocol/sdk/api-references/react.md) |
-| Custom contracts: encrypted inputs and outputs | [Encrypt/decrypt guide](https://docs.zama.org/protocol/sdk/guides/encrypt-decrypt.md) |
-| Permits, decryption delegation, credential storage | [Permit model](https://docs.zama.org/protocol/sdk/concepts/permit-model.md), [delegated decryption](https://docs.zama.org/protocol/sdk/guides/delegated-decryption.md) |
-| Node request identity/storage | [Node guide](https://docs.zama.org/protocol/sdk/guides/node-js-backend.md) |
-| Browser/WASM compatibility | [Supported environments](https://docs.zama.org/protocol/sdk/getting-started/supported-environments.md), [security headers](https://docs.zama.org/protocol/sdk/concepts/security-model.md#browser-security-headers) |
-| Verified deployment addresses | **zama-protocol** → `references/addresses.md` |
+1. Read the installed version in `node_modules/@zama-fhe/sdk/package.json`.
+2. Open the SDK's generated index for that version: `https://raw.githubusercontent.com/zama-ai/sdk/v<version>/llms.txt`. It lists the official docs, API reference and examples. Its links point at `main`. Replace `main` with `v<version>` to stay on your release.
+3. Check exact signatures in the installed type declarations under `node_modules/@zama-fhe/sdk/dist` and `node_modules/@zama-fhe/react-sdk/dist`.
 
-For other tasks, discover the appropriate stable documentation through the public [SDK index](https://raw.githubusercontent.com/zama-ai/sdk/main/llms.txt). Avoid `/beta/` documentation unless the project uses that release channel. Private app code, repository links and unreleased implementation details must not enter distributed advice.
+## Start from an official example
+
+Each example in [zama-ai/sdk `examples/`](https://github.com/zama-ai/sdk/tree/main/examples) has a `WALKTHROUGH.md`. Open the one for your stack at your version's tag.
+
+| Building | Example |
+|----------|---------|
+| React app with wagmi | `react-wagmi` |
+| React app with viem or ethers | `react-viem`, `react-ethers` |
+| Embedded wallet | `react-turnkey-wallet` |
+| Node.js script or service | `node-viem`, `node-ethers` |
+
+The React examples show provider setup, a server route that forwards relayer calls with the API key, and the confidential token flows.
+
+## Rules that hold across releases
+
+- **Encrypt for the contract that imports the value.** Pass that contract's address and the user's address, and send the returned encrypted values and proof to it unchanged.
+- **Ask for decryption permission on a click.** Wait for a valid permit before running decrypt queries, so pages never open a wallet prompt on load.
+- **Make the contract an operator first.** A contract that pulls confidential tokens with `confidentialTransferFrom` must be the holder's operator on that token.
+- **Expect results later.** A mined receipt does not mean results can be decrypted. Show pending and error states, and re-read handles after each transaction.
+- **Keep relayer API keys on the server.** Forward relayer calls through a server route, as the examples do.
+- **Use `cleartext()` only on local test chains.** It does not encrypt.
+- **Keep units exact.** Use `bigint` base units and read `decimals()` and `rate()` from the actual wrapper.
+- **Reset private state when the account or chain changes.** Never show a value decrypted for another account, chain or contract.

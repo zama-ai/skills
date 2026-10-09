@@ -1,27 +1,82 @@
 ---
 name: zama-solidity
-description: Write, review, or debug confidential Solidity on Zama FHEVM — FHE types/operations, ACL, ERC-7984, @fhevm/solidity, @openzeppelin/confidential-contracts, or Foundry/Hardhat setup. Also use for HCU cost/depth, ciphertext dependencies, escrow, auctions, RFQ, and batchers. Load zama-protocol first; use zama-typescript for SDK integration.
+description: Write, review, or debug confidential Solidity on Zama FHEVM — encrypted types and operations, ACL, public decryption, ERC-7984 confidential tokens, @fhevm/solidity, @openzeppelin/confidential-contracts, and Hardhat or Foundry setup. Also covers HCU cost and design of auctions, escrow, swaps and batchers. Load zama-protocol first; use zama-typescript for client code.
 license: BSD-3-Clause-Clear
 ---
 
 # Zama Solidity
 
-Load **zama-protocol** first for universal correctness/privacy rules. Keep this skill focused on contract decisions; read only the matching reference.
+Load **zama-protocol** first. Open a reference only when the task needs it:
 
 | Task | Read |
 |------|------|
-| Design, HCU/dependencies, deployed patterns | `references/code-map.md` |
-| Confidential tokens, wrappers, escrow | `references/erc7984.md` |
-| Raw FHE operations, ACL, public settlement | `references/fhe-advanced.md` |
-| Foundry / Hardhat setup | `references/setups/foundry.md` / `references/setups/hardhat.md` |
-| Deployment/configuration | **zama-protocol** → `references/addresses.md` |
+| Tokens, payments, escrow, wrappers | `references/erc7984.md` |
+| Public reveals, operation limits, tests vs production | `references/fhe-advanced.md` |
+| Design and cost, learning from deployed apps | `references/code-map.md` |
+| Project setup | `references/setups/hardhat.md` or `references/setups/foundry.md` |
 
-## Contract review priorities
+## What good FHEVM code looks like
 
-- **Use OpenZeppelin ERC-7984 for token accounting.** Review the actual value movement in vault/escrow/payment code: encrypted assertions about an amount are not custody of tokens. Prefer the official deployed wrapper when it fits the application's requirements.
-- **Account for the transferred result.** Insufficient balance or receiver rejection can produce an encrypted zero transfer. Never credit the requested amount without validating what actually moved.
-- **Keep correctness through optimisation.** Preserve overflow bounds, rounding, refunds, cancellation and settlement stages. Client-computed deposits remain untrusted; reduced HCU alone is not a validated speedup.
-- **Store results with persistent ACL access.** Pass temporary cross-contract values with transient grants. Test subsequent transactions, zero-transfer paths and caller permissions on existing handles.
-- **Use production decryption proofs.** Local decrypt helpers are test-only. Freeze expected public-result handles, verify the ordered proof and prevent duplicate economic actions.
+### Import an input where it was encrypted, then pass the handle
 
-For supported overloads, consult the installed `FHE.sol` and [FHEVM API reference](https://docs.zama.org/protocol/solidity-guides/smart-contract/functions.md). Respect library/tooling peer dependencies and template pins; the newest package combination is not necessarily compatible.
+```solidity
+function bid(externalEuint64 encryptedAmount, bytes calldata inputProof) external {
+    euint64 amount = FHE.fromExternal(encryptedAmount, inputProof); // the proof names this contract
+    FHE.allowTransient(amount, address(token)); // the token may use it during this call
+    euint64 sent = token.confidentialTransferFrom(msg.sender, address(this), amount);
+    // Credit `sent`, not `amount`.
+}
+```
+
+Passing `encryptedAmount` and `inputProof` on to the token fails: the proof was made for this contract. Grant the same temporary access before handing a stored handle to another contract.
+
+### Credit what actually moved
+
+An ERC-7984 transfer the sender cannot pay moves an encrypted zero instead of reverting. Use the amount the transfer returns, never the amount requested.
+
+### Choose with `FHE.select`
+
+```solidity
+ebool isHigher = FHE.gt(total, highestBid);
+highestBid = FHE.select(isHigher, total, highestBid);
+highestBidder = FHE.select(isHigher, FHE.asEaddress(msg.sender), highestBidder);
+FHE.allowThis(highestBid);
+FHE.allowThis(highestBidder);
+```
+
+Both sides are always computed, and nothing reverts on the encrypted outcome.
+
+### Grant access to every new handle you keep
+
+Each operation returns a new handle that nobody can use after the transaction. Call `FHE.allowThis` on handles you store and `FHE.allow(handle, user)` for users who should read them. When a function accepts an existing handle as an argument, check `FHE.isSenderAllowed(handle)`.
+
+### Reveal with a proof, once
+
+```solidity
+function requestReveal() external {
+    require(stage == Stage.Open && block.timestamp >= endTime, "not ended");
+    stage = Stage.Revealing;
+    FHE.makePubliclyDecryptable(highestBidder);
+    winnerHandle = FHE.toBytes32(highestBidder);
+}
+
+function finalize(address winner, bytes calldata decryptionProof) external {
+    require(stage == Stage.Revealing, "wrong stage");
+    bytes32[] memory handles = new bytes32[](1);
+    handles[0] = winnerHandle; // the stored handle, never one the caller chooses
+    FHE.checkSignatures(handles, abi.encode(winner), decryptionProof);
+    stage = Stage.Settled; // settles once
+    FHE.allowTransient(highestBid, address(token));
+    token.confidentialTransfer(seller, highestBid); // the price stays encrypted
+}
+```
+
+Reveal only what settlement needs. Here the winner's address is public. The price is not.
+
+### Configure every contract that calls `FHE`
+
+Inherit the config for your chain from `@fhevm/solidity/config/ZamaConfig.sol`, for example `contract Auction is ZamaEthereumConfig`. Proxies and clones skip constructors, so call `FHE.setCoprocessor(ZamaConfig.getEthereumCoprocessorConfig())` in their protected initializer.
+
+### Respect what encrypted operations can do
+
+`FHE.div` and `FHE.rem` need a plaintext divisor. A bounded random value needs a power-of-two bound. Arithmetic wraps on overflow, so bound values where it matters. Use the smallest type that fits and plaintext operands for public values. Check the installed `FHE.sol` or the [function reference](https://docs.zama.org/protocol/solidity-guides/smart-contract/functions.md) for supported overloads.

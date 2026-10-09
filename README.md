@@ -10,11 +10,11 @@ A plugin (id: `zama-protocol`, in the `zama-skills` marketplace) bundling three 
 
 | Skill               | What it covers                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------ |
-| **zama-protocol**   | FHE concepts, protocol architecture, planning, verified addresses, universal gotchas |
-| **zama-solidity**   | Encrypted Solidity — FHE types, ACL, ERC-7984, Foundry/Hardhat setup                 |
-| **zama-typescript** | TypeScript SDK — React, browser, Node.js, MV3, token flows, sessions                 |
+| **zama-protocol**   | The FHEVM model, package choice, planning, deployed addresses                        |
+| **zama-solidity**   | Encrypted Solidity — contract rules with examples, ERC-7984, reveals, Hardhat/Foundry |
+| **zama-typescript** | Clients with `@zama-fhe/sdk` — React, viem, ethers, Node, official examples           |
 
-All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client integration to `zama-typescript`. Domain skills load the universal protocol rules first; references are read on demand. The Solidity code map links verified mainnet examples, while API/setup tutorials stay in their maintained public documentation.
+All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client work to `zama-typescript`. Contract and client skills load `zama-protocol` first, and references are read only when a task needs them. The skills point to maintained sources — the protocol registry, OpenZeppelin, the SDK's version-matched docs and examples, and verified mainnet contracts — rather than copying tutorials.
 
 ## Install
 
@@ -66,7 +66,7 @@ git -C ~/src/zama-skills pull --ff-only
 uv run ~/src/zama-skills/scripts/translate_for_cursor.py --output /path/to/your-project/.cursor/rules
 ```
 
-The generator owns `zama-protocol-*.mdc` in the target directory. It removes obsolete rules and dangling symlinks from previous installs while preserving rules outside that prefix.
+The generator replaces symlinked rules with files, removes rules it generated earlier that no longer exist and links left dangling, and leaves every other file in the directory alone.
 
 ### Manual clone + symlink
 

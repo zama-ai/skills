@@ -7,16 +7,28 @@ alwaysApply: false
 
 _Reference for zama-typescript skill (zama-protocol plugin)_
 
-# Zama Integration Pitfalls
+# Integration Patterns
 
-Check these against the installed SDK's declarations; use the parent skill's public docs for full examples.
+Names below match current releases. Confirm them in the installed type declarations before use.
 
-- **Match input identity.** `sdk.encrypt` binds inputs to `contractAddress` and `userAddress`; preserve ordered `encryptedValues` and `inputProof`, which are already ABI-ready hex in SDK 3.x. Contract forwarding follows the protocol ACL rule; do not encrypt again for every hop.
-- **Separate permissions.** Decryption permits, onchain decryption delegation, confidential-token operators and underlying ERC-20 allowances serve different purposes. Grant permits through explicit user intent; gate decrypting queries with permit readiness to avoid wallet prompts on render.
-- **Check delegation support by release.** Protocol capability is not SDK capability: SDK 3.6.0 lacks [wildcard-grant fallback](https://github.com/zama-ai/sdk/blob/464764577777367e869c47ae53e6ba0de35e3f93/packages/sdk/src/services/delegation-service.ts#L187-L202) in its delegation preflight. Verify the exact SDK release and offline-permit batching limits before promising observer decryption.
-- **Scope private state.** Clear wallet-local decrypted caches/entitlements on identity changes. Use SDK query keys and `invalidateWalletLifecycleQueries` where applicable. Custom caches must distinguish account, chain, contract and handle; never display another context's decrypted result.
-- **Model the asynchronous flow.** A receipt does not imply ciphertext availability. Show pending/error states; bind public-decryption proofs to ordered expected handles. Persist phase-one unshield transaction IDs and resume finalization after interruption. Bound waits/retries and pass supported `signal`/`timeout` options; aborting a client wait does not undo a mined transaction.
-- **Keep token units exact.** Use integer base units and the actual wrapper's `decimals()`/`rate()`. `createToken` handles confidential tokens; `createWrappedToken` adds shield/unshield. Validate financial relationships onchain; client arithmetic is not proof of payment.
-- **Isolate server identity.** `asyncLocalStorage` isolates storage, not the signer/provider. Bind those separately for each authenticated request. In SDK 3.6, `node()` runs the backend on the calling thread, not a worker pool; use documented lifecycle/transport options.
-- **Release owned resources.** `dispose()` releases SDK resources for replacement; `terminate()` also disposes the signer at shutdown. In-flight work can finish. Do not clear credentials after each read or treat credential deletion as ordinary query invalidation.
-- **Browser headers enable parallelism.** COOP/COEP enables SharedArrayBuffer/multithreaded WASM; the compatible backend falls back to single-threaded execution when unavailable. Keep Relayer API keys in a server-side proxy.
+## Node services
+
+- **Isolate each request.** The `@zama-fhe/sdk/node` entry point provides request-scoped storage (`asyncLocalStorage`). Storage isolation does not isolate the signer: bind the signer and provider to each authenticated request too.
+- **Release the SDK when you replace or stop it.** `dispose()` frees its resources. `terminate()` also disposes the signer. Do not clear stored credentials after every read.
+- See the [Node.js guide](https://docs.zama.org/protocol/sdk/guides/node-js-backend.md).
+
+## Unshielding
+
+Unshielding takes two transactions: an unwrap, then a finalization once the decryption is available. If the app stops between them, use the SDK's pending-unshield and resume-unshield APIs to find and finish the operation instead of tracking transaction hashes yourself.
+
+## Permissions are four different things
+
+A decryption permit (signed off-chain), on-chain decryption delegation, a token operator and an ERC-20 allowance each grant something different. Delegated decryption support differs between releases. Check the [delegated decryption guide](https://docs.zama.org/protocol/sdk/guides/delegated-decryption.md) and the installed declarations before promising it.
+
+## Waits and cancellation
+
+Encrypt and decrypt calls accept `signal` and `timeout`. Bound retries. Aborting a wait in the client does not undo a transaction that was already mined.
+
+## Browser performance
+
+With COOP and COEP headers, the browser can run the FHE backend multithreaded. Without them it falls back to a single thread. See the [security headers](https://docs.zama.org/protocol/sdk/concepts/security-model.md#browser-security-headers).

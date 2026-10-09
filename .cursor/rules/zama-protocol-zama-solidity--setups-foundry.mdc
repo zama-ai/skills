@@ -9,9 +9,8 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 
 # Foundry
 
-For new projects, use `@fhevm/forge`, the FHEVM companion to `forge-std`. Follow its [release package and README](https://github.com/zama-ai/fhevm-mocks/tree/release/0.13.x/foundry/forge-fhevm-std/pkg) for dependencies, remappings and execution modes; match the target protocol release.
+Use `@fhevm/forge`, the FHEVM companion to `forge-std`: tests inherit `TestFhevm` instead of `Test`. Its source and README live in [fhevm-mocks](https://github.com/zama-ai/fhevm-mocks) under `foundry/`. Use the `release/*` branch that matches the protocol version you target, and follow the README for dependencies, remappings and execution modes. The older standalone `forge-fhevm` template uses a different setup. Do not mix the two.
 
-- The new library uses `TestFhevm`; the older standalone `forge-fhevm` template uses different setup and helper APIs. Do not mix their recipes.
-- Cleartext tests validate logic and permissions, not actual FHE/KMS computation. Forks may not know ciphertext plaintexts computed outside that test; check the library's fork-mode limitations.
-- Test payment results, overflow/rounding, repeated-call ACL access and proof/replay handling. Add filesystem permissions only for actual writes in the selected setup.
-- Use the selected project's compiler settings; `via_ir` is not an FHEVM prerequisite.
+- Tests run in cleartext. Forks do not know plaintexts computed outside the test. Check the README's fork-mode limits.
+- Test transferred amounts, overflow and rounding, access in later transactions, and replayed or forged reveals.
+- Add `fs_permissions` only for files the setup actually writes. `via_ir` is not an FHEVM requirement.
