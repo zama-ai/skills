@@ -1,6 +1,6 @@
 # Hardhat
 
-Use Hardhat 3 with `@fhevm/hardhat-plugin-v3`. Its README is the reference for the version you install: run `npm view @fhevm/hardhat-plugin-v3@<version> readme`, or open `node_modules/@fhevm/hardhat-plugin-v3/README.md`. It lists the peer dependencies, the `hardhat.config.ts` setup and the test helpers, including `decryptPublic*WithSignatures` for testing reveals. Example projects in other repositories can track a different release, so check their helper calls against this README.
+Use Hardhat 3 with `@fhevm/hardhat-plugin-v3`. Its README is the reference for the version you install: run `npm view @fhevm/hardhat-plugin-v3@<version> readme`, or open `node_modules/@fhevm/hardhat-plugin-v3/README.md`. It lists the peer dependencies, the `hardhat.config.ts` setup and the test helpers, including `decryptPublic*WithSignatures` for testing reveals. Install the peer versions the plugin declares (`npm view @fhevm/hardhat-plugin-v3@<version> peerDependencies`) rather than the version a README or example names. Example projects in other repositories can track a different release, so check their helper calls against this README.
 
 When peer dependency ranges conflict (for example, the OpenZeppelin confidential contracts pinning a different `@fhevm/solidity`), add an explicit override instead of installing with `--legacy-peer-deps`, which also skips Hardhat's own peer packages:
 

@@ -33,6 +33,7 @@ The official examples live in [zama-ai/sdk `examples/`](https://github.com/zama-
 | React app with viem or ethers | `react-viem`, `react-ethers` |
 | Embedded wallet | `react-turnkey-wallet` |
 | Node.js script or service | `node-viem`, `node-ethers` |
+| Your own contract: encrypt, write, decrypt | the "Encrypt & decrypt" guide in the index |
 
 The React examples show provider setup and the confidential token flows.
 

@@ -18,7 +18,7 @@ Load **zama-protocol** first. Open a reference only when the task needs it:
 | Design and cost, learning from deployed apps | `references/code-map.md` |
 | Project setup | `references/setups/hardhat.md` or `references/setups/foundry.md` |
 
-Complete, maintained contracts with tests are in the [Zama code examples](https://docs.zama.org/protocol/examples). Start from the closest one, such as the [sealed-bid auction](https://docs.zama.org/protocol/examples/auctions/sealed-bid-auction.md) or the [ERC-7984 to ERC-20 swap](https://docs.zama.org/protocol/examples/openzeppelin-confidential-contracts/erc7984/swaperc7984toerc20.md), and apply the rules below.
+Complete, maintained contracts with tests are in the [Zama code examples](https://docs.zama.org/protocol/examples). Start from the closest one, such as the [sealed-bid auction](https://docs.zama.org/protocol/examples/auctions/sealed-bid-auction.md) or the [ERC-7984 to ERC-20 swap](https://docs.zama.org/protocol/examples/openzeppelin-confidential-contracts/erc7984/swaperc7984toerc20.md), and check it against the rules below: examples can lag the current API.
 
 ## What good FHEVM code looks like
 
