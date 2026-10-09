@@ -17,6 +17,8 @@ Load **zama-protocol** first. Open a reference only when the task needs it:
 
 ## What good FHEVM code looks like
 
+Ordinary Solidity safety still applies: checks-effects-interactions, `nonReentrant` around token calls, and access control.
+
 ### Import an input where it was encrypted, then pass the handle
 
 ```solidity

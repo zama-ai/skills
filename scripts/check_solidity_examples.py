@@ -79,7 +79,7 @@ def main() -> int:
         contract = Path(build) / "SkillExamples.sol"
         contract.write_text(render(blocks), encoding="utf-8")
         result = subprocess.run(
-            ["npx", "solcjs", "--abi", "--base-path", ".", "--include-path", "node_modules",
+            ["node_modules/.bin/solcjs", "--abi", "--base-path", ".", "--include-path", "node_modules",
              "--output-dir", build, str(contract.relative_to(PROJECT))],
             cwd=PROJECT, capture_output=True, text=True,
         )

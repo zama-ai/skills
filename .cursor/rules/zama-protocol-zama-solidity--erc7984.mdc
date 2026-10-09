@@ -12,8 +12,8 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 Build on OpenZeppelin's [confidential contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) and read the installed package source for the exact API. Do not write your own encrypted balances, allowances or transfers.
 
 - **Move real tokens.** A payment, escrow or vault must transfer tokens. Encrypted numbers recorded beside a token are not custody.
-- **Operators replace allowances.** Before a contract can call `confidentialTransferFrom`, the holder calls `setOperator(contract, until)` on the token. Operator rights expire at `until`. An operator can move tokens and gets temporary access to the amount it moved. Reading the holder's balance needs a separate access grant.
-- **Receivers can decline.** With `confidentialTransferAndCall`, a receiver callback that declines gets the amount refunded, so the returned amount is zero, as for a transfer the sender cannot pay.
+- **Operators replace allowances.** Before a contract can call `confidentialTransferFrom`, the holder calls `setOperator(contract, until)` on the token, with `until` in Unix seconds. Operator rights expire then. An operator contract pulls only from `msg.sender`, never from an address the caller names. An operator can move tokens and gets temporary access to the amount it moved. Reading the holder's balance needs a separate access grant.
+- **Receivers can decline.** With `confidentialTransferAndCall`, a receiver callback that declines gets the amount refunded, so the returned amount is zero, as for a transfer the sender cannot pay. A receiver callback must check that `msg.sender` is the token it expects: anyone can call it directly.
 - **Use the token's units.** Amounts are `euint64`. OpenZeppelin's default is 6 decimals. Extensions can differ. A wrapper's `decimals()` and `rate()` can differ from its ERC-20's. Use integers only.
 - **Name overloads explicitly from ethers.** Transfer functions have one overload for an external input with proof and one for an existing handle.
 

@@ -40,9 +40,9 @@ The React examples show provider setup, a server route that forwards relayer cal
 
 - **Encrypt for the contract that imports the value.** Pass that contract's address and the user's address, and send the returned encrypted values and proof to it unchanged.
 - **Ask for decryption permission on a click.** Wait for a valid permit before running decrypt queries, so pages never open a wallet prompt on load.
-- **Make the contract an operator first.** A contract that pulls confidential tokens with `confidentialTransferFrom` must be the holder's operator on that token.
+- **Make the contract an operator first.** A contract that pulls confidential tokens with `confidentialTransferFrom` must be the holder's operator on that token. The expiry is in Unix seconds.
 - **Expect results later.** A mined receipt does not mean results can be decrypted. Show pending and error states, and re-read handles after each transaction.
-- **Keep relayer API keys on the server.** Forward relayer calls through a server route, as the examples do.
+- **Keep relayer API keys on the server.** Forward relayer calls through a server route, as the examples do. The example routes accept any caller, so add authentication or rate limits before production.
 - **Use `cleartext()` only on local test chains.** It does not encrypt.
 - **Keep units exact.** Use `bigint` base units and read `decimals()` and `rate()` from the actual wrapper.
 - **Reset private state when the account or chain changes.** Never show a value decrypted for another account, chain or contract.

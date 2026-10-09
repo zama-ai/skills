@@ -47,7 +47,7 @@ jobs:
 
       - name: Install latest packages
         working-directory: tests/solidity-examples
-        run: npm install --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Compile examples
         run: uv run scripts/check_solidity_examples.py

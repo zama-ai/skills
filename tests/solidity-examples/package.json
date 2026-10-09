@@ -5,7 +5,6 @@
     "@fhevm/solidity": "latest",
     "@openzeppelin/confidential-contracts": "latest",
     "@openzeppelin/contracts": "latest",
-    "encrypted-types": "latest",
     "solc": "0.8.27"
   },
   "overrides": {
