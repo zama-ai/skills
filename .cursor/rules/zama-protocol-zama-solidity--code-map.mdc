@@ -18,13 +18,16 @@ _Reference for zama-solidity skill (zama-protocol plugin)_
 
 ## Deployed examples
 
-Read verified source on Etherscan. The first two rows are fixed deployments that the registry does not track. Look up the others by name in the registry (**zama-protocol** → `references/addresses.md`). For a proxy, read its current implementation and linked libraries.
+Each link opens verified source on Etherscan. For a proxy, open the implementation from the proxy's code tab: it can change on upgrade. The [registry](https://github.com/zama-ai/protocol-registry) lists the other wrappers and batchers by type (**zama-protocol** → `references/addresses.md`).
 
 | Pattern | Contract | Start with |
 |---------|----------|------------|
-| Sealed bids paid in ERC-7984 | [AuctionToken](https://etherscan.io/address/0x04a5b8C32f9c38092B008A4939f1F91D550C4345#code) | `submitEncryptedBid`, `_computeBidAllocation`: payment checks on transferred amounts, division by a public denominator |
+| ERC-7984 wrapper of an ERC-20 | [cUSDC](https://etherscan.io/address/0xe978F22157048E5DB8E5d07971376e86671672B2#code), proxy to `ConfidentialWrapper` | `ERC7984ERC20WrapperUpgradeable`: `wrap`, `unwrap` (marks the amount publicly decryptable), `finalizeUnwrap` (deletes the request, checks the proof, then pays) |
+| Finding a token's wrapper on-chain | [ConfidentialTokenWrappersRegistry](https://etherscan.io/address/0xeb5015fF021DB115aCe010f23F55C2591059bBA0#code), proxy | `getConfidentialTokenAddress`, `isConfidentialTokenValid`: look wrappers up instead of hard-coding them |
+| Batched deposits with an aggregate reveal | [Deposit batcher](https://etherscan.io/address/0xA07c00A3b955B805B3Ea76b086f95a3e793715D5#code) and [redeem batcher](https://etherscan.io/address/0x3a906d6509EB4171Ee9fC71D083fb1638BaF083D#code) (Steakhouse Prime USDC) | `VaultBatcherConfidential.join`, OpenZeppelin `BatcherConfidential`: `_join`, `dispatchBatchCallback`, `_claim`, `recover`, rounding, slippage. Small batches expose individual amounts |
+| Receiver callback that checks the token | [VaultBatcherConfidentialRouter](https://etherscan.io/address/0x11c6Acfd368DDFAB97d15649eB8043C0197fac4C#code) | `onConfidentialTransferReceived` accepts only tokens listed in the wrapper registry. Its direct executor call for input binding is an advanced choice; prefer `FHE.fromExternal` |
+| Swap with escrow and fees | [ConfidentialSwap](https://etherscan.io/address/0x8Fe22dC7e624c02b1805d41E09741490E1018C01#code), proxy | `IntentLifecycleLib`, `EscrowLib`, `FeeLib.takeFee`: partitioned escrow, a fee computed with a shift, and why a shift of 64 needs its own case |
+| Sealed bids paid in ERC-7984 | [AuctionToken](https://etherscan.io/address/0x04a5b8C32f9c38092B008A4939f1F91D550C4345#code) | `submitEncryptedBid`, `_computeBidAllocation`: payment checks on transferred amounts, division by a public denominator. Its compliance access grants are specific to that app |
 | Per-user wallets created as clones | [WalletFactory](https://etherscan.io/address/0xBf58EE954CaeeF84B44F30131421e606272E393F#code) | `WalletFactory`, `AuctionWallet.initialize`: partitioned custody, configuring FHE in a clone |
-| Swap with escrow and fees | Registry entry `CONFIDENTIAL_SWAP` (Ethereum) | `IntentLifecycleLib`, `EscrowLib`, `FeeLib.takeFee`: partitioned escrow, a fee computed with a shift, and why a shift of 64 needs its own case |
-| Batched deposits with an aggregate reveal | Registry entries of type `vault_batcher` (Ethereum) | `VaultBatcherConfidential`, OpenZeppelin `BatcherConfidential`: `_join`, `dispatchBatchCallback`, `_claim`, proof checks and rounding. Small batches expose individual amounts |
 
 Verified source is not an audit. Read the callers and callees of any function you adapt, and check the installed API before reusing code.
