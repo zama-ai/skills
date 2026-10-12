@@ -1,0 +1,34 @@
+---
+description: Detailed reference for patterns (zama-typescript skill)
+alwaysApply: false
+---
+
+# Patterns
+
+_Reference for zama-typescript skill (zama-protocol plugin)_
+
+# Integration Patterns
+
+Names below match current releases. Confirm them in the installed type declarations before use.
+
+## Node services
+
+- **Isolate each request.** The `@zama-fhe/sdk/node` entry point provides request-scoped storage (`asyncLocalStorage`). Storage isolation does not isolate the signer: bind the signer and provider to each authenticated request too.
+- **Release the SDK when you replace or stop it.** `dispose()` frees its resources. `terminate()` also disposes the signer. Do not clear stored credentials after every read.
+- See the [Node.js guide](https://docs.zama.org/protocol/sdk/guides/node-js-backend.md).
+
+## Unshielding
+
+Unshielding takes two transactions: an unwrap, then a finalization once the decryption is available. If the app stops between them, use the SDK's pending-unshield and resume-unshield APIs to find and finish the operation instead of tracking transaction hashes yourself.
+
+## Permissions are four different things
+
+A decryption permit (signed off-chain), on-chain decryption delegation, a token operator and an ERC-20 allowance each grant something different. Delegated decryption support differs between releases. Check the [delegated decryption guide](https://docs.zama.org/protocol/sdk/guides/delegated-decryption.md) and the installed declarations before promising it.
+
+## Waits and cancellation
+
+Encrypt and decrypt calls accept `signal` and `timeout`. Bound retries. Aborting a wait in the client does not undo a transaction that was already mined.
+
+## Browser performance
+
+With COOP and COEP headers, the browser can run the FHE backend multithreaded. Without them it falls back to a single thread. See the [security headers](https://docs.zama.org/protocol/sdk/concepts/security-model.md#browser-security-headers).
