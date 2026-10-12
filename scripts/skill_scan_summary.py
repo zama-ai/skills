@@ -12,14 +12,18 @@ Environment variables:
   RUN_ID               — GitHub Actions run ID
   REPO                 — e.g. org/repo
   SCANNED_SHA          — the exact commit SHA that was checked out and scanned
-  BRANCH               — the branch that was scanned (PR source branch)
 """
 
+import glob
 import json
 import os
 import sys
+import traceback
 
 RESULTS_PATH = "/tmp/scan-results/results.json"
+# Set by the consolidating job to a directory of per-plugin scan artifacts. When unset, a
+# single scan job is reporting on its own results.
+RESULTS_DIR  = os.environ.get("RESULTS_DIR")
 
 SUMMARY     = os.environ.get("GITHUB_STEP_SUMMARY")
 REPO_URL    = os.environ.get("REPO_URL", "")
@@ -28,6 +32,7 @@ RUN_ID      = os.environ.get("RUN_ID", "")
 REPO        = os.environ.get("REPO", "")
 SCANNED_SHA = os.environ.get("SCANNED_SHA", "main")
 BRANCH      = os.environ.get("BRANCH", "main")
+JOB_INDEX   = os.environ.get("JOB_INDEX", "")
 
 SEV_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
 SEV_EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "INFO": "⚪"}
@@ -35,24 +40,93 @@ SEV_EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵"
 
 def write_summary(text: str) -> None:
     if SUMMARY:
-        with open(SUMMARY, "a") as f:
+        with open(SUMMARY, "a", encoding="utf-8") as f:
             f.write(text + "\n")
     else:
         print(text)
 
 
-if not os.path.exists(RESULTS_PATH):
+def report_crash(exc_type, exc, tb) -> None:
+    """Put the traceback in the job summary, not only in the runner log.
+
+    Actions logs are awkward to retrieve, and a summary that fails silently looks
+    identical to a scan that found nothing. Re-raises through the default hook so the
+    step still exits non-zero.
+    """
+    write_summary(
+        "**Skill Security Scan:** could not render the report.\n\n```\n"
+        + "".join(traceback.format_exception(exc_type, exc, tb))
+        + "```"
+    )
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+sys.excepthook = report_crash
+
+
+def scan_log_hint(results_dir: str) -> str:
+    """First error-looking line, else the last line, of the scan.log beside a results file."""
+    hint = ""
+    last_line = ""
+    scan_log_path = os.path.join(results_dir, "scan.log")
+    if os.path.exists(scan_log_path):
+        with open(scan_log_path, encoding="utf-8", errors="replace") as lf:
+            for line in lf:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+                if stripped and any(k in stripped for k in ("Error", "Exception", "Failed", "failed")):
+                    hint = stripped[:300]
+                    break
+    return hint or last_line[:300] or "Check the uploaded scan artifact for details."
+
+
+def merge(reports: list) -> dict:
+    """Combine per-plugin reports into the single report shape used below.
+
+    The PR scan is sharded one job per plugin, so a consolidated summary has to sum the
+    headline counts and concatenate the per-skill results. Skill paths were already
+    rewritten to GitHub URLs by the annotation step in each scan job.
+    """
+    merged = {"summary": {}, "results": []}
+    for key in ("total_skills_scanned", "total_findings", "safe_skills"):
+        merged["summary"][key] = sum(r.get("summary", {}).get(key) or 0 for r in reports)
+    for report in reports:
+        merged["results"].extend(report.get("results", []))
+    return merged
+
+
+if RESULTS_DIR:
+    paths = sorted(glob.glob(os.path.join(RESULTS_DIR, "**", "results.json"), recursive=True))
+else:
+    paths = [RESULTS_PATH] if os.path.exists(RESULTS_PATH) else []
+
+if not paths:
     print("results.json not found — skipping summary.")
     sys.exit(0)
 
-with open(RESULTS_PATH) as f:
-    content = f.read().strip()
+reports = []
+unreadable = []
+for path in paths:
+    with open(path, encoding="utf-8") as f:
+        content = f.read().strip()
+    if not content:
+        continue
+    try:
+        reports.append(json.loads(content))
+    except json.JSONDecodeError:
+        # One unreadable shard must not cost us the report for the others.
+        shard = os.path.dirname(path)
+        unreadable.append(f"{os.path.basename(shard)}: {scan_log_hint(shard)}")
 
-if not content:
+if not reports:
+    if unreadable:
+        write_summary("❌ **Failed to parse scan results**\n\n" + "\n".join(f"- `{u}`" for u in unreadable))
+        sys.exit(0)
     write_summary("**Skill Security Scan:** No skills found in this repository — nothing to scan.")
     sys.exit(0)
 
-data = json.loads(content)
+data = merge(reports)
 
 summary = data.get("summary", {})
 results = sorted(
@@ -66,7 +140,7 @@ MODE_LABELS = {
     "advanced-2": "advanced-2 (Opus 4.6 + VirusTotal + Consensus 1)",
 }
 mode_label    = MODE_LABELS.get(SCAN_MODE, SCAN_MODE)
-artifact_name = f"skill-scan-{SCAN_MODE}-results-{RUN_ID}"
+artifact_name = f"skill-scan-{SCAN_MODE}-{JOB_INDEX + '-' if JOB_INDEX else ''}results-{RUN_ID}"
 artifact_url  = f"https://github.com/{REPO}/actions/runs/{RUN_ID}"
 
 scanned = summary.get("total_skills_scanned", "?")
@@ -82,14 +156,30 @@ lines.append(f"**Target:** [{REPO_URL}]({REPO_URL}) @ `{BRANCH}`")
 lines.append(f"**Mode:** {mode_label}")
 lines.append(f"**Results:** {scanned} skills scanned — {total} findings ({safe} safe)")
 lines.append(f"**Full report:** [{artifact_name}]({artifact_url})")
+if unreadable:
+    lines.append(f"**Unreadable results:** {'; '.join(unreadable)}")
 lines.append("")
 
 # ── Per-skill collapsible sections ────────────────────────────────────────────
 # <details>/<summary> are used here because GitHub-Flavored Markdown has no
 # collapsible block syntax — HTML is unavoidable for this feature.
 if results:
+    global_tally = {}
+    for r in results:
+        for finding in r.get("findings", []):
+            sev = finding.get("severity", "INFO")
+            global_tally[sev] = global_tally.get(sev, 0) + 1
+    sev_row = ", ".join(
+        f"{global_tally.get(s, 0)} {s.capitalize()}"
+        for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+    )
     lines.append("<details>")
-    lines.append(f"<summary><strong>Skills ({scanned} scanned — {total} findings, {safe} safe)</strong></summary>")
+    lines.append(
+        f"<summary>"
+        f"<strong>{scanned} skills scanned</strong><br>"
+        f"{safe} safe / {total} findings ({sev_row})"
+        f"</summary>"
+    )
     lines.append("")
 
 for r in results:

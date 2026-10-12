@@ -1,9 +1,24 @@
 name: skill-security-scanner-pr
 
 # Scans Claude skills in this repository on every pull request.
-# Fails the PR if high-severity findings are detected.
 #
-# Deploy this workflow by copying it to .github/workflows/ in the marketplace/skill repo.
+# TODO: fail the PR on high-severity findings. NOT ENFORCED TODAY — findings are reported
+# in the job summary and the artifact, but they never turn a PR red. skill-scanner exits 0
+# unless it is passed --fail-on-severity / --fail-on-findings, and this workflow passes
+# neither, so scan_status below can only ever be "clean" or "error". See the two TODOs in
+# the scan job: one adds the flag, the other re-enables the findings branch of the gate.
+# Enabling it will start failing PRs on findings that already exist in this repository, so
+# it needs a triage pass first.
+#
+# Copy of zama-ai/ai-security .github/workflows/skill-security-scanner-pr.yml (the canonical
+# version). Keep it in sync with that file: only PLUGINS_DIR and on.pull_request.paths differ.
+#
+# Scan scope:
+#   The scanner's `scan-all` walks skills strictly serially and issues one LLM call per
+#   skill (plus one meta-analysis call per skill with findings). At ~35 s/skill with Opus
+#   a large marketplace (zama-marketplace: 44 skills, ~25-30 min) runs into timeout-minutes.
+#   So a pull request scans only the plugins it touches, one matrix job per plugin, and
+#   workflow_dispatch scans every plugin with the same jobs running in parallel.
 #
 # Scan tiers:
 #   simple      — static + behavioral analyzers only; no API keys; for workflow testing.
@@ -23,41 +38,138 @@ name: skill-security-scanner-pr
 # Secrets:
 #   - CLAUDE_CODE_OAUTH_TOKEN (advanced-1): Anthropic API key for Haiku LLM analysis.
 #   - ANTHROPIC_API_KEY (advanced-2): direct Anthropic API key (sk-ant-…) for Opus 4.6.
+#     Validated with a one-token call before scanning, not by its prefix: key prefixes vary by
+#     key type (sk-ant-api03-, sk-ant-usr-, sk-ant-svc-, …) and are not a documented contract.
+#     Use a service account key scoped to a single workspace — the scanner cannot send
+#     the anthropic-workspace-id header an unscoped key requires.
 #     Required for advanced-2 — Opus hits rate limits with OAuth tokens under parallel scans.
 #   - VIRUSTOTAL_API_KEY (advanced-1 and advanced-2): VirusTotal API key for binary file scanning.
 
 on:
   pull_request:
     paths:
-      - 'skills/**'
+      - 'skills/**' # Keep in sync with PLUGINS_DIR below
   workflow_dispatch:
     inputs:
+      # workflow_dispatch input is required for on-demand scans with a chosen tier.
+      # scan_tier is a constrained choice (simple|advanced-1|advanced-2), never
+      # interpolated into shell commands. No supply-chain vector.
+      # trunk-ignore(checkov/CKV_GHA_7)
       scan_tier:
         description: >
           simple — static/behavioral only (no API keys, for workflow testing).
-          advanced-1 — Haiku + VirusTotal (~$0.05/run, default, feature branch PRs).
-          advanced-2 — Opus 4.6 + VirusTotal (~$1.50/run, PRs merging into main).
+          advanced-1 — Haiku + VirusTotal (low cost, default, feature branch PRs).
+          advanced-2 — Opus 4.6 + VirusTotal (best quality, PRs merging into main).
         type: choice
         options:
           - advanced-1
           - simple
           - advanced-2
         required: false
-        default: 'advanced-1'
+        default: advanced-1
 
 permissions: {}
+
+env:
+  # The only repo-specific setting. Here every sub-directory is a single skill rather than a
+  # plugin, so each matrix job scans one skill (ai-security uses local-marketplace/plugins).
+  PLUGINS_DIR: skills
 
 concurrency:
   group: skill-security-scanner-pr-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true # Cancel superseded runs when a new commit is pushed to the PR
 
 jobs:
+
+  # ── Phase 0: Scope ────────────────────────────────────────────────────
+  # Decide which plugins this run has to scan. Keeping the scan scoped is what
+  # keeps each scan job well inside its timeout; see the "Scan scope" note above.
+
+  select-plugins:
+    name: select-plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # Checkout repository
+    outputs:
+      plugins: ${{ steps.select.outputs.plugins }}
+      count: ${{ steps.select.outputs.count }}
+      tier: ${{ steps.select.outputs.tier }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0 # Full history so the PR base commit is available to diff against
+
+      - name: Select plugins to scan
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_REF: ${{ github.base_ref }}
+          INPUT_SCAN_TIER: ${{ inputs.scan_tier || 'advanced-1' }}
+        run: |
+          set -euo pipefail
+
+          # Determine effective tier:
+          #   pull_request → main         = advanced-2 (Opus 4.6, best quality)
+          #   pull_request → other branch = advanced-1 (Haiku, low cost)
+          #   workflow_dispatch           = inputs.scan_tier (default: advanced-1)
+          # Decided once, here, so the job names, every scan job and the consolidated
+          # report all agree on a single value.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            TIER="$( [ "$BASE_REF" = "main" ] && echo "advanced-2" || echo "advanced-1" )"
+          else
+            TIER="${INPUT_SCAN_TIER:-advanced-1}"
+          fi
+          echo "Effective scan tier: $TIER"
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+
+          # A pull request scans only the plugins it touches. Any other trigger, or a
+          # missing base commit (force-push, shallow clone), falls back to every plugin
+          # so the scan degrades to slower — never to silently under-covering.
+          if [ "$EVENT_NAME" = "pull_request" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            REASON="changed by this PR"
+            SELECTED=$(git diff --name-only --diff-filter=d "$BASE_SHA" "$HEAD_SHA" -- "$PLUGINS_DIR" \
+              | sed "s|^$PLUGINS_DIR/||" \
+              | awk -F/ 'NF>1 {print $1}' \
+              | sort -u \
+              | while read -r p; do if [ -d "$PLUGINS_DIR/$p" ]; then echo "$p"; fi; done)
+          else
+            REASON="full scan"
+            SELECTED=$(find "$PLUGINS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          fi
+
+          COUNT=$(printf '%s\n' "$SELECTED" | grep -c . || true)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No plugin directories to scan ($REASON)."
+            echo "plugins=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Plugins to scan ($REASON, $COUNT): $(printf '%s\n' "$SELECTED" | tr '\n' ' ')"
+          echo "plugins=$(printf '%s\n' "$SELECTED" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
   scan-skills:
-    name: scan-skills-${{ github.event_name == 'pull_request' && (github.base_ref == 'main' && 'advanced-2' || 'advanced-1') || inputs.scan_tier || 'advanced-1' }}
+    name: scan-${{ matrix.plugin }}-${{ needs.select-plugins.outputs.tier }}
+    needs: select-plugins
+    if: needs.select-plugins.outputs.count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read # Checkout repository
+    strategy:
+      fail-fast: false # One failing plugin must not hide findings in the others
+      # Every job shares one Anthropic credential; cap the fan-out to stay under the
+      # provider rate limit (the same reason advanced-2 requires a direct API key).
+      max-parallel: 4
+      matrix:
+        plugin: ${{ fromJSON(needs.select-plugins.outputs.plugins) }}
     steps:
 
       # ── Phase 1: Setup ────────────────────────────────────────────────
@@ -88,15 +200,13 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/scan-results
 
-          # Determine effective tier:
-          #   pull_request → main         = advanced-2 (Opus 4.6, best quality)
-          #   pull_request → other branch = advanced-1 (Haiku, low cost)
-          #   workflow_dispatch           = inputs.scan_tier (default: advanced-1)
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            TIER="$( [ "$BASE_REF" = "main" ] && echo "advanced-2" || echo "advanced-1" )"
-          else
-            TIER="${INPUT_SCAN_TIER:-advanced-1}"
+          SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
+          if [ ! -d "$SCAN_TARGET" ]; then
+            echo "::error::Plugin directory not found: $PLUGINS_DIR/$PLUGIN"
+            exit 1
           fi
+
+          TIER="$TIER_INPUT"
           echo "Effective scan tier: $TIER"
           echo "effective_tier=$TIER" >> "$GITHUB_OUTPUT"
 
@@ -104,7 +214,7 @@ jobs:
           EXTRA_FLAGS=""
           case "$TIER" in
             simple)
-              echo "Scanning repository skills in $GITHUB_WORKSPACE (simple: static + behavioral) ..."
+              echo "Scanning $PLUGINS_DIR/$PLUGIN (simple: static + behavioral) ..."
               ;;
             advanced-1)
               if [ -z "$SECRET_CLAUDE_OAUTH" ]; then
@@ -119,22 +229,38 @@ jobs:
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_CLAUDE_OAUTH"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
               EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 2 --enable-meta"
-              echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced-1: Haiku + VirusTotal) ..."
+              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-1: Haiku + VirusTotal) ..."
               ;;
             advanced-2)
               if [ -z "$SECRET_ANTHROPIC_API_KEY" ]; then
                 echo "::error::Tier advanced-2 requires the ANTHROPIC_API_KEY secret, but it is empty or unset. Opus needs a direct API key — an OAuth token hits rate limits under parallel scans."
                 exit 1
               fi
-              case "$SECRET_ANTHROPIC_API_KEY" in
-                sk-ant-api*) : ;;
-                *) echo "::error::ANTHROPIC_API_KEY does not look like a valid Anthropic API key (expected 'sk-ant-api' prefix). advanced-2 needs a direct API key, not an OAuth token."; exit 1 ;;
-              esac
               export SKILL_SCANNER_LLM_MODEL="anthropic/claude-opus-4-6"
+              # Prove the key can call the model before scanning, instead of guessing from its
+              # prefix: a prefix allowlist rejects valid newer key formats (sk-ant-usr-…), and
+              # a key without model access is not an error to the scanner — it records
+              # LLM_ANALYSIS_FAILED per skill and still exits 0. The key goes to curl on stdin
+              # as config, so it never appears in the process list.
+              PREFLIGHT_CODE=$(printf 'header = "x-api-key: %s"\n' "$SECRET_ANTHROPIC_API_KEY" \
+                | curl -sS -K - -o /tmp/llm-preflight.json -w '%{http_code}' --max-time 60 \
+                    https://api.anthropic.com/v1/messages \
+                    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+                    -d "{\"model\":\"${SKILL_SCANNER_LLM_MODEL#anthropic/}\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}" \
+                || true)
+              case "${PREFLIGHT_CODE:-000}" in
+                200) : ;;
+                000|429|5??)
+                  # Network blip, rate limit or overload says nothing about the key itself.
+                  echo "::warning::Could not confirm ANTHROPIC_API_KEY (HTTP $PREFLIGHT_CODE); scanning anyway." ;;
+                *)
+                  echo "::error::ANTHROPIC_API_KEY cannot call ${SKILL_SCANNER_LLM_MODEL#anthropic/} (HTTP $PREFLIGHT_CODE): $(jq -r '.error.message // "no error message"' /tmp/llm-preflight.json 2>/dev/null). advanced-2 needs a direct API key with access to that model, not an OAuth token."
+                  exit 1 ;;
+              esac
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_ANTHROPIC_API_KEY"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
               EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 1 --enable-meta"
-              echo "Scanning repository skills in $GITHUB_WORKSPACE (advanced-2: Opus 4.6 + VirusTotal) ..."
+              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-2: Opus 4.6 + VirusTotal) ..."
               ;;
           esac
 
@@ -144,14 +270,24 @@ jobs:
           # SARIF is not used because the scanner's SARIF output does not embed per-skill base
           # paths (all findings share a single unresolved %SRCROOT% symbol), making it
           # impossible to correctly resolve file URIs across a multi-skill scan.
+          #
+          # --output-json writes the report directly, rather than capturing stdout. stdout is
+          # shared with whatever the scanner's dependencies decide to print — an LLM client
+          # logging a retry banner there is enough to prepend non-JSON to the report and break
+          # every consumer of it.
+          #
+          # TODO: add --fail-on-severity high here to make findings fail the PR. Without it
+          # the scanner returns 0 whatever it finds, which is why scan_status is never
+          # "findings". Pairs with the TODO on the gate step at the end of this job.
           # shellcheck disable=SC2086
-          skill-scanner scan-all "$GITHUB_WORKSPACE" \
+          skill-scanner scan-all "$SCAN_TARGET" \
             --recursive \
             --use-behavioral \
             $EXTRA_FLAGS \
             --policy balanced \
             --format json \
-            > /tmp/scan-results/results.json \
+            --output-json /tmp/scan-results/results.json \
+            > /tmp/scan-results/scan-stdout.log \
             2> /tmp/scan-results/scan.log
           SCAN_EXIT=$?
 
@@ -159,8 +295,18 @@ jobs:
 
           echo "scan_exit=$SCAN_EXIT" >> "$GITHUB_OUTPUT"
 
+          # Both scanner streams are redirected to files, so echo them into the job log —
+          # otherwise a failed or slow scan is only diagnosable by downloading the artifact.
+          echo "── skill-scanner stderr ──"
+          cat /tmp/scan-results/scan.log || true
+          echo "── skill-scanner stdout ──"
+          cat /tmp/scan-results/scan-stdout.log || true
+          echo "── end skill-scanner output ──"
+
           RESULTS_CONTENT=$(tr -d '[:space:]' < /tmp/scan-results/results.json 2>/dev/null || true)
           if [ "$SCAN_EXIT" -eq 0 ]; then
+            # TODO: "clean" is a misnomer until --fail-on-severity is set above — the scan
+            # may well have findings, they just do not affect the exit code today.
             echo "scan_status=clean"    >> "$GITHUB_OUTPUT"
           elif [ -z "$RESULTS_CONTENT" ]; then
             # Non-zero exit with no JSON output — could be "no skills found" (legitimate) or a
@@ -176,9 +322,8 @@ jobs:
             echo "scan_status=findings" >> "$GITHUB_OUTPUT"
           fi
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
-          INPUT_SCAN_TIER: ${{ inputs.scan_tier || 'advanced-1' }}
+          PLUGIN: ${{ matrix.plugin }}
+          TIER_INPUT: ${{ needs.select-plugins.outputs.tier }}
           SECRET_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           SECRET_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SECRET_VIRUSTOTAL: ${{ secrets.VIRUSTOTAL_API_KEY }}
@@ -199,6 +344,9 @@ jobs:
 
       - name: Publish step summary
         if: always()
+        # Reporting must never decide the build. Without this a crash here fails the job
+        # and, worse, skips the findings gate below, so real findings go unreported.
+        continue-on-error: true
         env:
           REPO_URL: https://github.com/${{ github.repository }}
           SCAN_MODE: ${{ steps.scan.outputs.effective_tier || 'advanced-1' }}
@@ -213,16 +361,111 @@ jobs:
         #   gh api repos/actions/upload-artifact/git/refs/tags/v7 --jq '.object.sha'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: skill-scan-${{ steps.scan.outputs.effective_tier || 'advanced-1' }}-results-${{ github.run_id }}
+          name: skill-scan-${{ steps.scan.outputs.effective_tier || 'advanced-1' }}-${{ matrix.plugin }}-results-${{ github.run_id }}
           path: /tmp/scan-results/
           retention-days: 30
 
       - name: Fail on Critical and High severity findings or scanner error
-        if: steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error'
+        # TODO: the 'findings' branch below is unreachable today — scan_status is only ever
+        # "clean" or "error" until --fail-on-severity is added to the scan command above.
+        # This step therefore currently guards against scanner failures only, not findings.
+        # always() so the security gate is still evaluated when an earlier step failed.
+        if: always() && (steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error')
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+          SCAN_STATUS: ${{ steps.scan.outputs.scan_status }}
+          SCAN_EXIT: ${{ steps.scan.outputs.scan_exit }}
+          TIER: ${{ steps.scan.outputs.effective_tier }}
         run: |
-          if [ "${{ steps.scan.outputs.scan_status }}" = "error" ]; then
-            echo "::error::Skill scanner (${{ steps.scan.outputs.effective_tier }}) crashed or produced no output (exit ${{ steps.scan.outputs.scan_exit }}). Failing closed."
+          if [ "$SCAN_STATUS" = "error" ]; then
+            echo "::error::Skill scanner ($TIER) crashed or produced no output for $PLUGINS_DIR/$PLUGIN (exit $SCAN_EXIT). Failing closed."
           else
-            echo "::error::Skill scanner (${{ steps.scan.outputs.effective_tier }}) found high-severity issues. Review the job summary and the uploaded JSON artifact."
+            echo "::error::Skill scanner ($TIER) found high-severity issues in $PLUGINS_DIR/$PLUGIN. Review the job summary and the uploaded JSON artifact."
           fi
           exit 1
+
+  # ── Phase 4: Report and gate ──────────────────────────────────────────
+  # Sharding the scan also shards its step summary, so this job stitches the
+  # per-plugin results back into the single whole-repository report, and is a
+  # stable status check present on every run — including runs where the matrix is
+  # empty. Use this job as the required check, not the matrix jobs: their names
+  # change with the selected plugins.
+
+  skill-scan-result:
+    name: skill-scan-result
+    needs: [select-plugins, scan-skills]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # Checkout the summary script
+      actions: read # Download this run's scan artifacts
+    steps:
+      - name: Checkout repository
+        if: always()
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install uv
+        if: always()
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
+        with:
+          version: 0.6.14
+          enable-cache: false
+
+      - name: Download per-plugin scan results
+        if: always()
+        # Tolerate zero matches: the matrix is skipped when a PR selects no plugins, and
+        # scan jobs that die before their upload step leave nothing behind. Both cases are
+        # judged by "Check scan outcome" below, not by this step.
+        continue-on-error: true
+        #   gh api repos/actions/download-artifact/git/refs/tags/v7 --jq '.object.sha'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: skill-scan-*-results-${{ github.run_id }}
+          path: /tmp/all-scan-results
+          merge-multiple: false # Keep one directory per plugin; names would collide otherwise
+
+      - name: Publish consolidated step summary
+        if: always()
+        continue-on-error: true # Reporting must never decide the build; the gate below does
+        env:
+          RESULTS_DIR: /tmp/all-scan-results
+          REPO_URL: https://github.com/${{ github.repository }}
+          SCAN_MODE: ${{ needs.select-plugins.outputs.tier }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          SCANNED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: uv run scripts/skill_scan_summary.py
+
+      - name: Check scan outcome
+        if: always() # The gate must run even if the report above could not be rendered
+        env:
+          SELECT_RESULT: ${{ needs.select-plugins.result }}
+          SCAN_RESULT: ${{ needs.scan-skills.result }}
+          PLUGIN_COUNT: ${{ needs.select-plugins.outputs.count }}
+        run: |
+          set -euo pipefail
+
+          if [ "$SELECT_RESULT" != "success" ]; then
+            echo "::error::Plugin selection did not succeed ($SELECT_RESULT). Failing closed."
+            exit 1
+          fi
+
+          if [ "${PLUGIN_COUNT:-0}" -eq 0 ]; then
+            echo "No plugin directories changed — no skills to scan."
+            exit 0
+          fi
+
+          case "$SCAN_RESULT" in
+            success)
+              echo "All $PLUGIN_COUNT plugin scan(s) passed."
+              ;;
+            *)
+              echo "::error::One or more plugin scans did not pass ($SCAN_RESULT). Failing closed."
+              exit 1
+              ;;
+          esac
