@@ -14,7 +14,7 @@ A plugin (id: `zama-protocol`, in the `zama-skills` marketplace) bundling three 
 | **zama-solidity**   | Encrypted Solidity — contract rules, maintained examples, ERC-7984, reveals, Hardhat/Foundry |
 | **zama-typescript** | Clients with `@zama-fhe/sdk` — React, viem, ethers, Node, official examples           |
 
-All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client work to `zama-typescript`. Contract and client skills load `zama-protocol` first, and references are read only when a task needs them. The skills point to maintained sources — the protocol registry, OpenZeppelin, the SDK's version-matched docs and examples, and verified mainnet contracts — rather than copying tutorials. Contract rules link the [Zama code examples](https://docs.zama.org/protocol/examples) for complete, tested contracts.
+All three install together. Their descriptions route protocol questions to `zama-protocol`, contract work to `zama-solidity`, and client work to `zama-typescript`. Contract and client skills load `zama-protocol` first, and references are read only when a task needs them. The skills point to maintained sources — the protocol registry, OpenZeppelin, the SDK's version-matched docs and examples, and verified mainnet contracts — rather than copying tutorials.
 
 ## Install
 
@@ -47,7 +47,7 @@ codex plugin marketplace add zama-ai/skills
 codex plugin add zama-protocol@zama-skills
 ```
 
-You can also install it from `/plugins` inside Codex. Update later with `codex plugin marketplace upgrade zama-skills`.
+You can also install it from `/plugins` inside Codex. To update, run `codex plugin marketplace upgrade zama-skills`, then `codex plugin add zama-protocol@zama-skills` again.
 
 ### Cursor
 
