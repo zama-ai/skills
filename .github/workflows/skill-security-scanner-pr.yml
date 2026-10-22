@@ -2,32 +2,45 @@ name: skill-security-scanner-pr
 
 # Scans Claude skills in this repository on every pull request.
 #
-# TODO: fail the PR on high-severity findings. NOT ENFORCED TODAY — findings are reported
-# in the job summary and the artifact, but they never turn a PR red. skill-scanner exits 0
-# unless it is passed --fail-on-severity / --fail-on-findings, and this workflow passes
-# neither, so scan_status below can only ever be "clean" or "error". See the two TODOs in
-# the scan job: one adds the flag, the other re-enables the findings branch of the gate.
-# Enabling it will start failing PRs on findings that already exist in this repository, so
-# it needs a triage pass first.
+# Gate: a critical or high finding in what a pull request changes fails its check. That is a
+# skill folder that holds a changed file (a moved file counts at its old and new path), and
+# always the plugin-level files of a changed plugin: its scripts, hooks and other components
+# serve every skill. Findings in other skill folders of the plugin, and lower findings, are
+# reported in the job summary and the artifact only; so a changed skill that starts running a
+# script of another, unchanged skill is not caught by its findings. A manual run counts every
+# finding, and so does a pull request whose base commit is missing (it says so in a notice).
+# A SKILL.md the scanner cannot load fails the check, because its folder would go unscanned. So
+# does a file still too large for the AI analysis under the scan policy's larger budgets (on a
+# pull request, only in a part it counts). Both scans run with --fail-on-severity high and
+# --verbose. The meta-analysis of the advanced tiers can dismiss findings as false positives:
+# a dismissed AI finding is dropped, but a finding of a deterministic analyzer still counts,
+# because a prompt injection in the scanned files could make the meta-analysis dismiss it. The
+# check is not required on main yet: a failing scan shows the author a red check and its
+# findings, but does not block the merge. Requiring skill-scan-result comes later.
 #
 # Copy of zama-ai/ai-security .github/workflows/skill-security-scanner-pr.yml (the canonical
-# version). Keep it in sync with that file: only PLUGINS_DIR and on.pull_request.paths differ.
+# version), with scripts/skill_scan_summary.py and scripts/skill_scan_budget.py. Keep them in sync
+# with that repository: only PLUGINS_DIR below and the scripts' uv headers differ.
 #
 # Scan scope:
 #   The scanner's `scan-all` walks skills strictly serially and issues one LLM call per
-#   skill (plus one meta-analysis call per skill with findings). At ~35 s/skill with Opus
+#   skill (plus one meta-analysis call per skill with findings). At about half a minute per skill,
 #   a large marketplace (zama-marketplace: 44 skills, ~25-30 min) runs into timeout-minutes.
 #   So a pull request scans only the plugins it touches, one matrix job per plugin, and
 #   workflow_dispatch scans every plugin with the same jobs running in parallel.
+#   `scan-all` finds only skill folders (a folder that holds a SKILL.md), and the scanner reads
+#   no file outside that folder. So each plugin job also scans the plugin's files outside its
+#   skill folders (scripts shared by several skills, hooks, commands, agents, MCP and plugin
+#   configuration) as one generated package, and reports them under the plugin directory.
 #
 # Scan tiers:
 #   simple      — static + behavioral analyzers only; no API keys; for workflow testing.
-#   advanced-1  — Haiku + VirusTotal; low cost (~$0.05/run); default for feature branch PRs.
-#   advanced-2  — Opus 4.6 + VirusTotal; best quality (~$1.50/run); for PRs merging into main.
+#   advanced-1  — Haiku 4.5 + VirusTotal; lowest cost; default for feature branch PRs.
+#   advanced-2  — Haiku 5.5 + VirusTotal; for PRs merging into main.
 #
 # Auto-selection (pull_request trigger):
-#   PR → main         → advanced-2  (Opus 4.6, ANTHROPIC_API_KEY)
-#   PR → other branch → advanced-1  (Haiku, CLAUDE_CODE_OAUTH_TOKEN)
+#   PR → main         → advanced-2  (Haiku 5.5, ANTHROPIC_API_KEY)
+#   PR → other branch → advanced-1  (Haiku 4.5, CLAUDE_CODE_OAUTH_TOKEN)
 #
 # Manual override (workflow_dispatch): choose any tier; default advanced-1.
 #
@@ -36,19 +49,24 @@ name: skill-security-scanner-pr
 #   - Minimal permissions: contents:read only
 #
 # Secrets:
-#   - CLAUDE_CODE_OAUTH_TOKEN (advanced-1): Anthropic API key for Haiku LLM analysis.
-#   - ANTHROPIC_API_KEY (advanced-2): direct Anthropic API key (sk-ant-…) for Opus 4.6.
+#   - CLAUDE_CODE_OAUTH_TOKEN (advanced-1): Anthropic API key for Haiku 4.5 LLM analysis.
+#   - ANTHROPIC_API_KEY (advanced-2): direct Anthropic API key (sk-ant-…) for Haiku 5.5.
 #     Validated with a one-token call before scanning, not by its prefix: key prefixes vary by
 #     key type (sk-ant-api03-, sk-ant-usr-, sk-ant-svc-, …) and are not a documented contract.
 #     Use a service account key scoped to a single workspace — the scanner cannot send
 #     the anthropic-workspace-id header an unscoped key requires.
-#     Required for advanced-2 — Opus hits rate limits with OAuth tokens under parallel scans.
+#     Required for advanced-2 — OAuth tokens hit rate limits under parallel scans.
 #   - VIRUSTOTAL_API_KEY (advanced-1 and advanced-2): VirusTotal API key for binary file scanning.
 
 on:
+  # No paths filter: the skill-placement check in select-plugins must run on every PR, and
+  # GitHub leaves a required check from a path-skipped workflow pending forever. A PR that
+  # changes no plugin finishes in seconds.
   pull_request:
-    paths:
-      - 'skills/**' # Keep in sync with PLUGINS_DIR below
+    # edited: re-scan when the PR's base branch changes, which the default types miss. It also
+    # fires on title and body edits; the gate then re-runs in full rather than skipping, because
+    # a skipped run would replace an earlier failing result with a passing one.
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       # workflow_dispatch input is required for on-demand scans with a chosen tier.
@@ -58,8 +76,8 @@ on:
       scan_tier:
         description: >
           simple — static/behavioral only (no API keys, for workflow testing).
-          advanced-1 — Haiku + VirusTotal (low cost, default, feature branch PRs).
-          advanced-2 — Opus 4.6 + VirusTotal (best quality, PRs merging into main).
+          advanced-1 — Haiku 4.5 + VirusTotal (low cost, default, feature branch PRs).
+          advanced-2 — Haiku 5.5 + VirusTotal (PRs merging into main).
         type: choice
         options:
           - advanced-1
@@ -95,6 +113,8 @@ jobs:
       plugins: ${{ steps.select.outputs.plugins }}
       count: ${{ steps.select.outputs.count }}
       tier: ${{ steps.select.outputs.tier }}
+      scope: ${{ steps.select.outputs.scope }}
+      units: ${{ steps.select.outputs.units }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -115,8 +135,8 @@ jobs:
           set -euo pipefail
 
           # Determine effective tier:
-          #   pull_request → main         = advanced-2 (Opus 4.6, best quality)
-          #   pull_request → other branch = advanced-1 (Haiku, low cost)
+          #   pull_request → main         = advanced-2 (Haiku 5.5)
+          #   pull_request → other branch = advanced-1 (Haiku 4.5, low cost)
           #   workflow_dispatch           = inputs.scan_tier (default: advanced-1)
           # Decided once, here, so the job names, every scan job and the consolidated
           # report all agree on a single value.
@@ -131,16 +151,98 @@ jobs:
           # A pull request scans only the plugins it touches. Any other trigger, or a
           # missing base commit (force-push, shallow clone), falls back to every plugin
           # so the scan degrades to slower — never to silently under-covering.
+          # The three-dot diff compares against the merge base, so plugins changed only on
+          # the base branch since the PR branched are not rescanned. Deletions count: removing
+          # a script or guard a skill relies on changes its behaviour. A plugin deleted as a
+          # whole is dropped by the -d check below.
           if [ "$EVENT_NAME" = "pull_request" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             REASON="changed by this PR"
-            SELECTED=$(git diff --name-only --diff-filter=d "$BASE_SHA" "$HEAD_SHA" -- "$PLUGINS_DIR" \
-              | sed "s|^$PLUGINS_DIR/||" \
-              | awk -F/ 'NF>1 {print $1}' \
+            SCOPE=changed
+            # core.quotePath=false: git otherwise prints non-ASCII paths quoted and escaped, which
+            # no prefix or name match below would recognise. --no-renames lists a moved file at its
+            # old and its new path, so moving a file out of a skill also changes that skill.
+            CHANGED=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" -- "$PLUGINS_DIR")
+            SELECTED=$(printf '%s\n' "$CHANGED" \
+              | awk -v p="$PLUGINS_DIR/" 'index($0, p) == 1 { n = split(substr($0, length(p) + 1), a, "/"); if (n > 1) print a[1] }' \
               | sort -u \
               | while read -r p; do if [ -d "$PLUGINS_DIR/$p" ]; then echo "$p"; fi; done)
           else
             REASON="full scan"
+            SCOPE=all
+            CHANGED=""
             SELECTED=$(find "$PLUGINS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          fi
+          # The gate counts a pull request's findings only in the parts it changes. A part is a skill
+          # folder, relative to its plugin ("." when the plugin folder is the skill), or the plugin's
+          # files outside its skills (""). A changed path belongs to every skill folder that holds it
+          # in the base or the head tree, so a deleted skill's files stay with that skill. The
+          # plugin-level part always counts for a changed plugin: its scripts, hooks and other
+          # components serve every skill, so a changed SKILL.md can start running one of them. Each
+          # scan job gets the list of its own plugin only, and the paths reach jq through files, so
+          # a large pull request cannot exceed the argument size limit. Any other scan counts every
+          # finding; so does a pull request whose base commit is missing, which says so.
+          UNITS='{}'
+          if [ "$SCOPE" = changed ]; then
+            printf '%s\n' "$CHANGED" > "$RUNNER_TEMP/changed.txt"
+            { git -c core.quotePath=false ls-tree -r --name-only "$BASE_SHA" -- "$PLUGINS_DIR"
+              git -c core.quotePath=false ls-tree -r --name-only "$HEAD_SHA" -- "$PLUGINS_DIR"; } \
+              | awk '/(^|\/)SKILL\.md$/ { sub(/\/SKILL\.md$/, ""); print }' | sort -u > "$RUNNER_TEMP/folders.txt"
+            UNITS=$(jq -cn --arg p "$PLUGINS_DIR/" --rawfile changed "$RUNNER_TEMP/changed.txt" --rawfile folders "$RUNNER_TEMP/folders.txt" '
+              ($folders | split("\n") | map(select(. != ""))) as $f
+              | [$changed | split("\n")[] | select(startswith($p)) | . as $path
+                 | (ltrimstr($p) | split("/")) as $parts | select(($parts | length) > 1)
+                 | ($p + $parts[0]) as $root
+                 | [$f[] as $d | select($d == $root or ($path | startswith($d + "/"))) | $d] as $holders
+                 | {plugin: $parts[0],
+                    units: ([""] + [$holders[] | if . == $root then "." else ltrimstr($root + "/") end])}]
+              | group_by(.plugin) | map({key: .[0].plugin, value: ([.[].units[]] | unique)}) | from_entries')
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "::notice::The base commit of this pull request is missing, so every plugin is scanned and every critical or high finding counts."
+          fi
+          echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
+          echo "units=$UNITS" >> "$GITHUB_OUTPUT"
+
+          # Refuse what this check could not scan. Read from the checked-out tree, not the diff, so
+          # it holds for every trigger, for PRs that only touch a skill's scripts, and for skills
+          # that predate the PR. Prefixes are compared literally, not as regexes.
+          #   - Paths git quotes even with core.quotePath=false (control characters, quotes,
+          #     backslashes) would slip past every prefix and name match; no skill needs them.
+          #   - The scanner skips symlinked files and cannot see into submodules, so neither may
+          #     sit under PLUGINS_DIR.
+          #   - The scanner reads only files named exactly SKILL.md inside a plugin directory under
+          #     PLUGINS_DIR, so any other skill file would pass unscanned. Claude Code loads a skill
+          #     only from <plugin>/skills/<name>/SKILL.md, so a SKILL.md anywhere else would only
+          #     mark its folder as a skill here and hide its files from the plugin-level scan: a fake
+          #     hooks/SKILL.md would hide hooks.json, which Claude Code still runs. <plugin>/SKILL.md
+          #     is accepted for repositories of bare skills, where each plugin directory is one skill.
+          TREE=$(git -c core.quotePath=false ls-files)
+          ODD=$(printf '%s\n%s\n' "$TREE" "$CHANGED" | grep '^"' || true)
+          # A backtick, "<", ">" or "|" in a file name would break the job summary's code spans,
+          # HTML and table rows; no plugin needs them.
+          BADNAMES=$(git -c core.quotePath=false ls-files -- "$PLUGINS_DIR" | grep -E '[`<>|]' || true)
+          LINKS=$(git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR" \
+            | awk -F '\t' '{ split($1, m, " ") } m[1] == "120000" || m[1] == "160000" { print $2 }')
+          MISPLACED=$(printf '%s\n' "$TREE" | grep -iE '(^|/)skill\.md$' \
+            | awk -v p="$PLUGINS_DIR/" '{ rel = substr($0, length(p) + 1) }
+                !(index($0, p) == 1 && (rel ~ /^[^\/]+\/SKILL\.md$/ || rel ~ /^[^\/]+\/skills\/[^\/]+\/SKILL\.md$/))' || true)
+          PROBLEMS=""
+          if [ -n "$ODD" ]; then
+            PROBLEMS="${PROBLEMS}Paths with control characters, quotes or backslashes: $(printf '%s\n' "$ODD" | tr '\n' ' '). "
+          fi
+          if [ -n "$BADNAMES" ]; then
+            PROBLEMS="${PROBLEMS}File names with a backtick, '<', '>' or '|' under $PLUGINS_DIR, which would break the job summary: $(printf '%s\n' "$BADNAMES" | tr '\n' ' '). "
+          fi
+          if [ -n "$LINKS" ]; then
+            PROBLEMS="${PROBLEMS}Symlinks or submodules under $PLUGINS_DIR, which the scanner does not follow: $(printf '%s\n' "$LINKS" | tr '\n' ' '). "
+          fi
+          if [ -n "$MISPLACED" ]; then
+            PROBLEMS="${PROBLEMS}Skill files that are not <plugin>/skills/<name>/SKILL.md (or <plugin>/SKILL.md for a bare skill) under $PLUGINS_DIR: $(printf '%s\n' "$MISPLACED" | tr '\n' ' '). "
+          fi
+          if [ -n "$PROBLEMS" ]; then
+            MSG="Refused, because this check would not scan them. ${PROBLEMS}"
+            echo "::error::$MSG"
+            printf '### Skill Security Scan: refused\n\n%s\n' "$MSG" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
           COUNT=$(printf '%s\n' "$SELECTED" | grep -c . || true)
@@ -189,7 +291,9 @@ jobs:
         run: |
           set -euo pipefail
           uv venv /tmp/skill-scanner-env
-          uv pip install --python /tmp/skill-scanner-env cisco-ai-skill-scanner==2.0.9
+          # litellm is pinned too: the scanner accepts a range, and the gate should not change with
+          # whatever litellm release is newest on the day.
+          uv pip install --python /tmp/skill-scanner-env cisco-ai-skill-scanner==2.3.0 litellm==1.106.0
           echo "/tmp/skill-scanner-env/bin" >> "$GITHUB_PATH"
 
       # ── Phase 2: Scan ─────────────────────────────────────────────────
@@ -199,6 +303,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/scan-results
+          # Uploaded with the report, so the summary can name the plugin even when
+          # download-artifact extracts a lone artifact without its named directory.
+          printf '%s\n' "$PLUGIN" > /tmp/scan-results/plugin
 
           SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
           if [ ! -d "$SCAN_TARGET" ]; then
@@ -208,9 +315,38 @@ jobs:
 
           TIER="$TIER_INPUT"
           echo "Effective scan tier: $TIER"
-          echo "effective_tier=$TIER" >> "$GITHUB_OUTPUT"
 
           # Map tier to scanner config; export LLM vars so the scanner subprocess picks them up.
+          # Prove a credential can call its model before scanning, instead of guessing from its
+          # prefix: key prefixes vary by key type and are not a documented contract. It is sent
+          # the way LiteLLM will send it: an sk-ant-oat token as an OAuth bearer, anything else as
+          # x-api-key. The credential reaches curl on stdin as config, never in the process list.
+          # 000/429/5xx only warn: they say nothing about the credential, and an AI analysis that
+          # then fails still fails this job (see the checks after the scan).
+          llm_preflight() {
+            # $1: model id without the provider prefix, $2: secret name for messages, $3: credential.
+            local code
+            code=$( {
+                if [ "${3#sk-ant-oat}" != "$3" ]; then
+                  printf 'header = "authorization: Bearer %s"\nheader = "anthropic-beta: oauth-2025-04-20"\nheader = "anthropic-dangerous-direct-browser-access: true"\n' "$3"
+                else
+                  printf 'header = "x-api-key: %s"\n' "$3"
+                fi
+              } | curl -sS -K - -o /tmp/llm-preflight.json -w '%{http_code}' --max-time 60 \
+                    https://api.anthropic.com/v1/messages \
+                    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+                    -d "{\"model\":\"$1\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}" \
+              || true)
+            case "${code:-000}" in
+              200) : ;;
+              000|429|5??)
+                echo "::warning::Could not confirm $2 (HTTP ${code:-000}); scanning anyway." ;;
+              *)
+                echo "::error::$2 cannot call $1 (HTTP $code): $(jq -r '.error.message // "no error message"' /tmp/llm-preflight.json 2>/dev/null)."
+                exit 1 ;;
+            esac
+          }
+
           EXTRA_FLAGS=""
           case "$TIER" in
             simple)
@@ -221,48 +357,133 @@ jobs:
                 echo "::error::Tier advanced-1 requires the CLAUDE_CODE_OAUTH_TOKEN secret, but it is empty or unset. You can use the 'simple' tier (no API key needed)."
                 exit 1
               fi
+              # LiteLLM picks the auth scheme from this prefix (sk-ant-oat → OAuth bearer), so here
+              # it is a type check rather than a format guess.
               case "$SECRET_CLAUDE_OAUTH" in
                 sk-ant-oat*) : ;;
                 *) echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not have the expected 'sk-ant-oat' prefix — check the secret value."; exit 1 ;;
               esac
               export SKILL_SCANNER_LLM_MODEL="anthropic/claude-haiku-4-5-20251001"
+              llm_preflight "${SKILL_SCANNER_LLM_MODEL#anthropic/}" CLAUDE_CODE_OAUTH_TOKEN "$SECRET_CLAUDE_OAUTH"
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_CLAUDE_OAUTH"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
               EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 2 --enable-meta"
-              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-1: Haiku + VirusTotal) ..."
+              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-1: Haiku 4.5 + VirusTotal) ..."
               ;;
             advanced-2)
               if [ -z "$SECRET_ANTHROPIC_API_KEY" ]; then
-                echo "::error::Tier advanced-2 requires the ANTHROPIC_API_KEY secret, but it is empty or unset. Opus needs a direct API key — an OAuth token hits rate limits under parallel scans."
+                echo "::error::Tier advanced-2 requires the ANTHROPIC_API_KEY secret, but it is empty or unset. It needs a direct API key — an OAuth token hits rate limits under parallel scans."
                 exit 1
               fi
-              export SKILL_SCANNER_LLM_MODEL="anthropic/claude-opus-4-6"
-              # Prove the key can call the model before scanning, instead of guessing from its
-              # prefix: a prefix allowlist rejects valid newer key formats (sk-ant-usr-…), and
-              # a key without model access is not an error to the scanner — it records
-              # LLM_ANALYSIS_FAILED per skill and still exits 0. The key goes to curl on stdin
-              # as config, so it never appears in the process list.
-              PREFLIGHT_CODE=$(printf 'header = "x-api-key: %s"\n' "$SECRET_ANTHROPIC_API_KEY" \
-                | curl -sS -K - -o /tmp/llm-preflight.json -w '%{http_code}' --max-time 60 \
-                    https://api.anthropic.com/v1/messages \
-                    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
-                    -d "{\"model\":\"${SKILL_SCANNER_LLM_MODEL#anthropic/}\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}" \
-                || true)
-              case "${PREFLIGHT_CODE:-000}" in
-                200) : ;;
-                000|429|5??)
-                  # Network blip, rate limit or overload says nothing about the key itself.
-                  echo "::warning::Could not confirm ANTHROPIC_API_KEY (HTTP $PREFLIGHT_CODE); scanning anyway." ;;
-                *)
-                  echo "::error::ANTHROPIC_API_KEY cannot call ${SKILL_SCANNER_LLM_MODEL#anthropic/} (HTTP $PREFLIGHT_CODE): $(jq -r '.error.message // "no error message"' /tmp/llm-preflight.json 2>/dev/null). advanced-2 needs a direct API key with access to that model, not an OAuth token."
-                  exit 1 ;;
-              esac
+              # Haiku 5.5 at its default effort (medium). On a deliberately unsafe test plugin it flagged
+              # all three unsafe skills at CRITICAL or HIGH and left the safe one clean, as Sonnet 4.6 did,
+              # at about a sixth of the cost and in less time; high effort found nothing more. Sonnet 5.5
+              # and Opus 5.5 stopped their answers on the same test, leaving the scan as an error. Thinking
+              # counts toward max_tokens, hence the higher cap.
+              export SKILL_SCANNER_LLM_MODEL="anthropic/claude-haiku-5-5"
+              llm_preflight "${SKILL_SCANNER_LLM_MODEL#anthropic/}" ANTHROPIC_API_KEY "$SECRET_ANTHROPIC_API_KEY"
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_ANTHROPIC_API_KEY"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
-              EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 1 --enable-meta"
-              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-2: Opus 4.6 + VirusTotal) ..."
+              EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 1 --enable-meta --llm-max-tokens 16000"
+              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-2: Haiku 5.5 + VirusTotal) ..."
               ;;
           esac
+
+          # Plugin-level files: every file of the plugin that is not inside a skill folder, for
+          # example scripts shared by several skills, hooks, commands, agents, MCP and plugin
+          # configuration. scan-all finds only folders that hold a SKILL.md, and the scanner reads
+          # no file outside that folder, so these files would pass unscanned. Copy them into one
+          # generated package, scanned as a unit after the skills and reported under the plugin.
+          CODE_PARENT=/tmp/plugin-code
+          rm -f /tmp/scan-results/unreadable-paths.txt
+          # The package name follows the scanner's skill-name rules (lowercase letters, digits and
+          # hyphens, at most 64 characters), whatever the plugin directory is called.
+          CODE_NAME="$(printf '%s' "$PLUGIN" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | cut -c1-52)-plugin-code"
+          CODE_PKG="$CODE_PARENT/$CODE_NAME"
+          rm -rf "$CODE_PARENT"
+          mkdir -p "$CODE_PKG"
+          SKILL_DIRS=$(cd "$SCAN_TARGET" && find . -type f -name SKILL.md -printf '%h\n')
+          (cd "$SCAN_TARGET" && find . -type f -print \
+            | awk -v dirs="$SKILL_DIRS" 'BEGIN { n = split(dirs, d, "\n") }
+                { for (i = 1; i <= n; i++) if (d[i] == "." || index($0, d[i] "/") == 1) next; print }' \
+            | xargs -r -d '\n' cp --parents -t "$CODE_PKG" --)
+          # Claude Code runs these whatever folder holds them, so they always go into the package,
+          # also when a SKILL.md marks their folder as a skill (the plugin folder of a bare skill).
+          # plugin.json can move a component to another path, also into a skill folder, so the
+          # relative paths of its component fields go in too. A path that is absolute or has ".."
+          # is skipped: it is not a file of this plugin.
+          (cd "$SCAN_TARGET" && {
+              find .claude-plugin/plugin.json .mcp.json .lsp.json hooks commands agents -type f -print 2>/dev/null || true
+              { jq -r '[.commands, .agents, .hooks, .mcpServers, .lspServers, .outputStyles][]
+                    | if type == "string" then . elif type == "array" then .[] | strings else empty end' \
+                  .claude-plugin/plugin.json 2>/dev/null || true; } \
+                | while IFS= read -r c; do
+                    c="${c#./}"
+                    case "/$c/" in //*|*/../*) continue ;; esac
+                    # "./" first, so a path that starts with "-" cannot become a find option.
+                    find "./$c" -type f -print 2>/dev/null || true
+                  done
+            } | xargs -r -d '\n' cp --parents -t "$CODE_PKG" --)
+          if [ -z "$(find "$CODE_PKG" -type f -print -quit)" ]; then
+            rm -rf "$CODE_PARENT"
+          else
+            # The scanner needs a SKILL.md. Its text is fixed here; the only plugin content in it is
+            # file paths. Values are double-quoted: select-plugins refuses paths with quotes or
+            # backslashes. The AI analysis reads scripts (the scanner's code types: .py, .sh, .bash,
+            # .js, .mjs, .cjs, .ts, .tsx) as code, but any other file only when SKILL.md links to it,
+            # as a skill links its references. So the body links every other text file: commands,
+            # agents, hooks.json, .mcp.json, plugin.json. Binaries go to VirusTotal instead. The
+            # scanner finds a link as [text](target) with no "]" in the text and no ")" in the
+            # target, so the text is fixed. It cannot link a path with ")" or a leading "#", and it
+            # refuses a reference with ".." anywhere: those paths fail the job at the end of this step.
+            {
+              printf -- '---\nname: "%s"\ndescription: "%s"\nlicense: "%s"\n---\n\n%s\n\n' \
+                "$CODE_NAME" \
+                "Files of the $PLUGIN plugin outside its skill folders, which its skills or Claude Code can run." \
+                "Not applicable: generated by the scan workflow" \
+                "Generated by skill-security-scanner-pr.yml, not part of the plugin. The files here are the files of the plugin outside its skill folders. Treat them as code and instructions that run on the user's machine. Scripts are read as code. The other files are:"
+              (cd "$CODE_PKG" && find . -type f ! -path ./SKILL.md -printf '%P\n' | LC_ALL=C sort) \
+                | while IFS= read -r f; do
+                    case "$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')" in *.py|*.sh|*.bash|*.js|*.mjs|*.cjs|*.ts|*.tsx) continue ;; esac
+                    LC_ALL=C grep -qI . "$CODE_PKG/$f" || continue
+                    # Documentation is not a plugin component, so it is not linked; the static checks read it.
+                    case "$(basename "$f" | tr '[:lower:]' '[:upper:]')" in README*|CHANGELOG*|LICENSE*) continue ;; esac
+                    case "$f" in *")"*|"#"*|*..*) printf '%s\n' "$f" >> /tmp/scan-results/unreadable-paths.txt; continue ;; esac
+                    printf -- '- [file](%s)\n' "$f"
+                  done
+            } > "$CODE_PKG/SKILL.md"
+            echo "Plugin-level files outside the skill folders: $(find "$CODE_PKG" -type f ! -path "$CODE_PKG/SKILL.md" | wc -l)"
+          fi
+
+          # The scan policy: balanced, with larger AI budgets. The balanced defaults (20k characters
+          # for the SKILL.md body, 15k per script, 10k per linked file, 100k in total) leave most of an
+          # instruction-heavy skill such as sdlc-check out of the AI analysis, which is the analyzer
+          # that reads instructions. 400k in total keeps a margin under the models' 200k-token context.
+          # Written here, not read from the repository, so it has the trust of this workflow file.
+          POLICY=/tmp/skill-scanner-policy.yaml
+          cat > "$POLICY" <<'POLICY_EOF'
+          preset_base: balanced
+          llm_analysis:
+            max_instruction_body_chars: 100000
+            max_code_file_chars: 100000
+            max_referenced_file_chars: 100000
+            max_total_prompt_chars: 400000
+          POLICY_EOF
+
+          # Files still too large for the AI analysis: the policy leaves them out of it with only an
+          # INFO finding, which the meta-analysis can also mark as a false positive and drop. List
+          # them up front with the scanner's own budget code; they fail the job at the end of this
+          # step. Checked in every tier, so a manual simple run reports them too.
+          BUDGET_SKIPS=""
+          BUDGET_FAILED=""
+          PARTS=()
+          while IFS= read -r d; do
+            if [ "$d" = . ]; then PARTS+=("$SCAN_TARGET"); elif [ -n "$d" ]; then PARTS+=("$SCAN_TARGET/${d#./}"); fi
+          done <<< "$SKILL_DIRS"
+          if [ -d "$CODE_PKG" ]; then PARTS+=("$CODE_PKG"); fi
+          if ! BUDGET_SKIPS=$(/tmp/skill-scanner-env/bin/python -I "$GITHUB_WORKSPACE/scripts/skill_scan_budget.py" "$POLICY" "${PARTS[@]}"); then
+            BUDGET_FAILED=1
+          fi
 
           set +e
 
@@ -276,20 +497,41 @@ jobs:
           # logging a retry banner there is enough to prepend non-JSON to the report and break
           # every consumer of it.
           #
-          # TODO: add --fail-on-severity high here to make findings fail the PR. Without it
-          # the scanner returns 0 whatever it finds, which is why scan_status is never
-          # "findings". Pairs with the TODO on the gate step at the end of this job.
+          # --fail-on-severity high: the scanner writes the report, then exits 1 when it holds a
+          # critical or high finding. It also exits 1 when it finds no skill or crashes, so the
+          # status below reads the report, not only the exit code.
           # shellcheck disable=SC2086
           skill-scanner scan-all "$SCAN_TARGET" \
             --recursive \
             --use-behavioral \
             $EXTRA_FLAGS \
-            --policy balanced \
+            --policy "$POLICY" \
+            --fail-on-severity high \
+            --verbose \
             --format json \
             --output-json /tmp/scan-results/results.json \
             > /tmp/scan-results/scan-stdout.log \
             2> /tmp/scan-results/scan.log
           SCAN_EXIT=$?
+
+          CODE_EXIT=0
+          if [ -d "$CODE_PKG" ]; then
+            echo "Scanning the plugin-level files of $PLUGINS_DIR/$PLUGIN ..."
+            # Same analyzers and flags as the skills. scan-all, not scan, so that the report has
+            # the same shape as results.json and can be merged into it below.
+            # shellcheck disable=SC2086
+            skill-scanner scan-all "$CODE_PARENT" \
+              --use-behavioral \
+              $EXTRA_FLAGS \
+              --policy "$POLICY" \
+              --fail-on-severity high \
+              --verbose \
+              --format json \
+              --output-json /tmp/scan-results/plugin-code.json \
+              > /tmp/scan-results/plugin-code-stdout.log \
+              2> /tmp/scan-results/plugin-code.log
+            CODE_EXIT=$?
+          fi
 
           set -e
 
@@ -297,40 +539,254 @@ jobs:
 
           # Both scanner streams are redirected to files, so echo them into the job log —
           # otherwise a failed or slow scan is only diagnosable by downloading the artifact.
+          # That output carries text a scanned skill can influence (LLM responses, for one), and a
+          # line starting with "::" would run as a workflow command, so pause command processing
+          # while printing it. The token is random per run, so the output cannot end the pause.
+          STOP_TOKEN=$(cat /proc/sys/kernel/random/uuid)
+          echo "::stop-commands::$STOP_TOKEN"
           echo "── skill-scanner stderr ──"
           cat /tmp/scan-results/scan.log || true
           echo "── skill-scanner stdout ──"
           cat /tmp/scan-results/scan-stdout.log || true
+          if [ -d "$CODE_PKG" ]; then
+            echo "── skill-scanner stderr, plugin-level files ──"
+            cat /tmp/scan-results/plugin-code.log || true
+            echo "── skill-scanner stdout, plugin-level files ──"
+            cat /tmp/scan-results/plugin-code-stdout.log || true
+          fi
           echo "── end skill-scanner output ──"
+          echo "::$STOP_TOKEN::"
 
           RESULTS_CONTENT=$(tr -d '[:space:]' < /tmp/scan-results/results.json 2>/dev/null || true)
-          if [ "$SCAN_EXIT" -eq 0 ]; then
-            # TODO: "clean" is a misnomer until --fail-on-severity is set above — the scan
-            # may well have findings, they just do not affect the exit code today.
-            echo "scan_status=clean"    >> "$GITHUB_OUTPUT"
-          elif [ -z "$RESULTS_CONTENT" ]; then
-            # Non-zero exit with no JSON output — could be "no skills found" (legitimate) or a
-            # real crash. Distinguish by checking scan.log: the scanner prints a known message
-            # to stderr when it finds no skill packages and returns 1.
-            if grep -qF "No skills found to scan." /tmp/scan-results/scan.log 2>/dev/null; then
-              echo "scan_status=clean"  >> "$GITHUB_OUTPUT"
+          # With --verbose the scanner keeps the findings its meta-analysis marks as false positives,
+          # with meta_false_positive set, instead of dropping them. A finding of a deterministic
+          # analyzer (static, behavioral, pipeline, YARA, ...) counts even then: the meta-analysis is
+          # an LLM, and a prompt injection in the scanned files could make it dismiss a real HIGH.
+          # Only an AI finding (analyzer llm or meta) that the meta-analysis dismisses is dropped,
+          # except LLM_ANALYSIS_FAILED: in advanced-2 it is the only sign of a failed AI analysis.
+          KEPT='def kept: select(.rule_id == "LLM_ANALYSIS_FAILED" or .metadata.meta_false_positive != true or ((.analyzer // "") | test("^(llm|meta)") | not));'
+          # Critical and high findings of a report that count. Fails when the report is unreadable.
+          high_count() { jq -er "$KEPT"' [.results[]?.findings[]? | kept | select(.severity == "CRITICAL" or .severity == "HIGH")] | length' "$1" 2>/dev/null; }
+          # Critical and high findings as the scanner counted them for its exit code, dismissed ones included.
+          raw_high() { jq -er '.summary.findings_by_severity | (.critical + .high)' "$1" 2>/dev/null; }
+          # judge <exit code> <report> <log>: prints clean, findings or error; used for both scans.
+          # With --fail-on-severity high, exit 0 must come with a readable report and means no
+          # critical or high finding. Exit 1 means one (the scanner's own count holds it), no skill
+          # found (the log says so), or a crash (anything else).
+          judge() {
+            local n
+            if [ "$1" -eq 0 ]; then
+              if jq -e '.summary.total_skills_scanned | numbers' "$2" > /dev/null 2>&1; then echo clean; else echo error; fi
+            elif [ -z "$({ tr -d '[:space:]' < "$2"; } 2>/dev/null || true)" ]; then
+              if grep -qF "No skills found to scan." "$3" 2>/dev/null; then echo clean; else echo error; fi
+            elif n=$(raw_high "$2") && [ "$n" -gt 0 ]; then
+              if n=$(high_count "$2") && [ "$n" -gt 0 ]; then echo findings; else echo clean; fi
             else
-              # No known "no skills" message — treat as scanner error and fail closed.
-              echo "scan_status=error"  >> "$GITHUB_OUTPUT"
+              echo error
             fi
-          else
-            echo "scan_status=findings" >> "$GITHUB_OUTPUT"
+          }
+          # drop_dismissed <report>: drop the AI findings the meta-analysis dismissed, as the scanner
+          # does without --verbose, and recount, so the report, the summary and the artifact show
+          # what the gate counts. A deterministic finding it dismissed stays, still marked.
+          drop_dismissed() {
+            jq -e '.results | arrays' "$1" > /dev/null 2>&1 || return 0
+            jq "$KEPT"'
+              (.results[].findings) |= map(kept)
+              | .results[] |= (.findings_count = (.findings | length)
+                  | .is_safe = ([.findings[] | select(.severity == "CRITICAL" or .severity == "HIGH")] | length == 0)
+                  | .max_severity = ([.findings[].severity] as $s
+                      | first(("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO") | select(. as $x | any($s[]; . == $x))) // "SAFE"))
+              | .summary.total_findings = ([.results[].findings[]] | length)
+              | .summary.safe_skills = ([.results[] | select(.is_safe)] | length)
+              | .summary.findings_by_severity = (reduce (.results[].findings[].severity | ascii_downcase) as $v
+                  ({critical: 0, high: 0, medium: 0, low: 0, info: 0}; .[$v] += 1))' "$1" > "$1.kept"
+            mv "$1.kept" "$1"
+          }
+          STATUS=$(judge "$SCAN_EXIT" /tmp/scan-results/results.json /tmp/scan-results/scan.log)
+          if [ "$STATUS" = error ]; then
+            echo "::error::Skill scanner exited $SCAN_EXIT for $PLUGINS_DIR/$PLUGIN without a report that explains it. Failing closed."
           fi
+          drop_dismissed /tmp/scan-results/results.json
+
+          # Judge the plugin-level scan the same way, then merge its report into results.json, so
+          # the job summary, the artifact and the AI checks below cover both scans. Every path in
+          # it points at the plugin directory, which the annotation step then turns into links;
+          # plugin_level_files marks the entry for the job summary. The plugin-level part is not a
+          # skill, so it is counted in plugin_level_parts_scanned/_safe, not in the skill counts.
+          if [ -d "$CODE_PKG" ]; then
+            # /dev/null as the log: the package always holds a skill, so "no skill found" is an error.
+            case "$(judge "$CODE_EXIT" /tmp/scan-results/plugin-code.json /dev/null)" in
+              error)
+                echo "::error::Skill scanner exited $CODE_EXIT for the plugin-level files of $PLUGINS_DIR/$PLUGIN without a report that explains it. Failing closed."
+                STATUS=error ;;
+              findings)
+                [ "$STATUS" = error ] || STATUS=findings ;;
+            esac
+            drop_dismissed /tmp/scan-results/plugin-code.json
+            if jq -e '.summary.total_skills_scanned | numbers' /tmp/scan-results/plugin-code.json > /dev/null 2>&1; then
+              jq --arg from "$CODE_PKG" --arg to "$SCAN_TARGET" \
+                'walk(if type == "string" then split($from) | join($to) else . end)
+                 | .results |= map(. + {plugin_level_files: true})
+                 | .summary.plugin_level_parts_scanned = .summary.total_skills_scanned
+                 | .summary.plugin_level_parts_safe = .summary.safe_skills
+                 | .summary.total_skills_scanned = 0
+                 | .summary.safe_skills = 0' \
+                /tmp/scan-results/plugin-code.json > /tmp/scan-results/plugin-code.mapped.json
+              if jq -e '.results | arrays' /tmp/scan-results/results.json > /dev/null 2>&1; then
+                jq -s '.[0] as $s | .[1] as $c | $s
+                  | .results += $c.results
+                  | .summary.total_findings += $c.summary.total_findings
+                  | .summary.plugin_level_parts_scanned = $c.summary.plugin_level_parts_scanned
+                  | .summary.plugin_level_parts_safe = $c.summary.plugin_level_parts_safe
+                  | .summary.findings_by_severity = (reduce ([$s, $c][] | .summary.findings_by_severity // {} | to_entries[]) as $e
+                      ({}; .[$e.key] += $e.value))' \
+                  /tmp/scan-results/results.json /tmp/scan-results/plugin-code.mapped.json > /tmp/scan-results/merged.json
+                mv /tmp/scan-results/merged.json /tmp/scan-results/results.json
+              elif [ -z "$RESULTS_CONTENT" ] && grep -qF "No skills found to scan." /tmp/scan-results/scan.log 2>/dev/null; then
+                # A plugin with no skill: the plugin-level report is the whole report.
+                cp /tmp/scan-results/plugin-code.mapped.json /tmp/scan-results/results.json
+              fi
+              # Otherwise the skill report is unreadable, which already fails the job. Both reports
+              # stay in the artifact.
+            fi
+            RESULTS_CONTENT=$(tr -d '[:space:]' < /tmp/scan-results/results.json 2>/dev/null || true)
+          fi
+
+          # Record the files each part was scanned with, so the job summary shows what was covered,
+          # not only what was found. The scanner reads every regular file under a skill folder except
+          # .git; the plugin-level part is the generated package without its SKILL.md. One list of
+          # "<part index> TAB <file>" lines, then one jq pass over the report.
+          if jq -e '.results | arrays' /tmp/scan-results/results.json > /dev/null 2>&1; then
+            jq -r '.results | to_entries[] | "\(.key)\t\(.value.plugin_level_files // false)\t\(.value.skill_path)"' \
+                /tmp/scan-results/results.json \
+              | while IFS=$'\t' read -r i plugin_level dir; do
+                  if [ "$plugin_level" = true ]; then
+                    (cd "$CODE_PKG" && find . -type f ! -path ./SKILL.md -printf '%P\n') || true
+                  else
+                    (cd "$dir" && find . -type f ! -path '*/.git/*' -printf '%P\n') || true
+                  fi | LC_ALL=C sort | sed "s/^/$i\t/"
+                done > /tmp/scan-results/scanned-files.tsv
+            jq --rawfile tsv /tmp/scan-results/scanned-files.tsv '
+                ($tsv | split("\n") | map(select(. != "") | split("\t") | {i: .[0], f: (.[1:] | join("\t"))})
+                 | group_by(.i) | map({key: .[0].i, value: map(.f)}) | from_entries) as $m
+                | .results |= [to_entries[] | .value + {scanned_files: ($m[.key | tostring] // [])}]' \
+              /tmp/scan-results/results.json > /tmp/scan-results/listed.json
+            mv /tmp/scan-results/listed.json /tmp/scan-results/results.json
+          fi
+
+          # On a pull request, only findings in the parts it changes count for the gate;
+          # select-plugins lists them for this plugin (CHANGED_UNITS). Findings elsewhere in the
+          # plugin stay in the summary and the artifact, but do not fail a PR that does not touch
+          # them. Each part gets changed_by_pr, so the job summary shows the same split as the gate.
+          # A changed skill without a result cannot pass unseen: the SKILL.md check below fails the job.
+          if [ "$SCOPE" = changed ] && jq -e '.results | arrays' /tmp/scan-results/results.json > /dev/null 2>&1; then
+            if jq --argjson units "${CHANGED_UNITS:-null}" --arg root "$SCAN_TARGET" '
+                ($units // []) as $units
+                | .results |= map(
+                    (if .plugin_level_files then "" elif .skill_path == $root then "."
+                     else (.skill_path | ltrimstr($root + "/")) end) as $u
+                    | . + {changed_by_pr: any($units[]; . == $u)})' \
+                /tmp/scan-results/results.json > /tmp/scan-results/marked.json 2>/dev/null; then
+              mv /tmp/scan-results/marked.json /tmp/scan-results/results.json
+              GATE_HIGH=$(jq '[.results[] | select(.changed_by_pr) | .findings[] | select(.severity == "CRITICAL" or .severity == "HIGH")] | length' /tmp/scan-results/results.json)
+              if [ "$STATUS" = findings ] && [ "$GATE_HIGH" -eq 0 ]; then
+                echo "::notice::$PLUGINS_DIR/$PLUGIN has critical or high findings only in parts this PR does not change. They are in the skill-scan-result summary and do not fail this PR."
+                STATUS=clean
+              fi
+            else
+              echo "::error::Could not match the findings of $PLUGINS_DIR/$PLUGIN to the parts this PR changes. Failing closed."
+              STATUS=error
+            fi
+          fi
+
+          # A failed AI analysis is not an error to the scanner, which carries on with the static
+          # results alone — and those miss attacks written as SKILL.md instructions. It shows up
+          # in one of two ways, and each fails the job; a re-run usually clears a transient API
+          # error, an authentication error needs the credential fixed:
+          #   - an LLM_ANALYSIS_FAILED finding (single-run analysis, advanced-2);
+          #   - "Consensus run N failed" in the log (consensus analysis, advanced-1): the failed run
+          #     counts as empty, and with 2 runs a finding must appear in both, so one failure
+          #     silently drops every AI finding.
+          # An AI analyzer that cannot load stops the scanner before it scans, with no report, so the
+          # status above is already an error.
+          if [ -n "$RESULTS_CONTENT" ]; then
+            if ! LLM_FAILED=$(jq '[.results[]?.findings[]? | select(.rule_id == "LLM_ANALYSIS_FAILED")] | length' /tmp/scan-results/results.json 2>/dev/null); then
+              echo "::error::Could not read the scan report for $PLUGINS_DIR/$PLUGIN."
+              STATUS=error
+            elif [ "$LLM_FAILED" -gt 0 ]; then
+              echo "::error::AI analysis did not complete for $LLM_FAILED skill(s) in $PLUGINS_DIR/$PLUGIN. Re-run the job; see LLM_ANALYSIS_FAILED in the report."
+              STATUS=error
+            fi
+          fi
+          # Both logs: the plugin-level scan has no log when the plugin has no file outside its skills.
+          if grep -qE 'Consensus run [0-9]+ failed' /tmp/scan-results/scan.log /tmp/scan-results/plugin-code.log 2>/dev/null; then
+            echo "::error::AI analysis did not complete in $PLUGINS_DIR/$PLUGIN: $(grep -h -m1 -oE 'Consensus run [0-9]+ failed.{0,200}' /tmp/scan-results/scan.log /tmp/scan-results/plugin-code.log 2>/dev/null | head -n 1). Re-run the job, or fix the credential if this is an authentication error."
+            STATUS=error
+          fi
+          # Every folder that holds a SKILL.md is left out of the plugin-level package, so each one
+          # must have a result from the skill scan. The scanner skips a SKILL.md it cannot load (no
+          # or bad frontmatter) with a warning only, which would leave that folder unscanned.
+          LOADED=$(jq -r '.results[]? | select(.plugin_level_files | not) | .skill_path' /tmp/scan-results/results.json 2>/dev/null || true)
+          UNSCANNED=$(printf '%s\n' "$SKILL_DIRS" | while IFS= read -r d; do
+              [ -n "$d" ] || continue
+              if [ "$d" = . ]; then p="$SCAN_TARGET"; else p="$SCAN_TARGET/${d#./}"; fi
+              printf '%s\n' "$LOADED" | grep -Fxq -- "$p" || printf '%s\n' "${d#./}/SKILL.md"
+            done)
+          if [ -n "$UNSCANNED" ] && [ "$STATUS" != error ]; then
+            echo "::error::The scanner could not load these SKILL.md files in $PLUGINS_DIR/$PLUGIN, so their folders were not scanned: $(printf '%s\n' "$UNSCANNED" | tr '\n' ' ')Check their frontmatter (name, description); the reason is in the log after 'Failed to load'."
+            STATUS=error
+          fi
+          # On a pull request, a too-large file fails the check only in a part the PR changes, like a
+          # finding; elsewhere in the plugin it is reported in a notice.
+          if [ -n "$BUDGET_SKIPS" ]; then
+            BUDGET_COUNTED=""
+            BUDGET_OTHER=""
+            # Fields are tab-separated: select-plugins refuses a tab in a path, so a folder name
+            # cannot shift them.
+            while IFS=$'\t' read -r folder file size reason; do
+              if [ "$folder" = "$CODE_PKG" ]; then u=""; shown="plugin-level files"
+              elif [ "$folder" = "$SCAN_TARGET" ]; then u="."; shown="."
+              else u="${folder#"$SCAN_TARGET/"}"; shown="$u"; fi
+              shown="$shown: $file ($size chars): $reason"
+              if [ "$SCOPE" != changed ] || jq -e --arg u "$u" 'index([$u]) != null' <<< "${CHANGED_UNITS:-null}" > /dev/null 2>&1; then
+                BUDGET_COUNTED="${BUDGET_COUNTED}${shown}; "
+              else
+                BUDGET_OTHER="${BUDGET_OTHER}${shown}; "
+              fi
+            done <<< "$BUDGET_SKIPS"
+            if [ -n "$BUDGET_COUNTED" ]; then
+              echo "::error::Too large for the scanner's AI analysis, which would leave these files of $PLUGINS_DIR/$PLUGIN out: ${BUDGET_COUNTED}Split or shorten them, or raise the limits in the policy this step writes."
+              STATUS=error
+            fi
+            if [ -n "$BUDGET_OTHER" ]; then
+              echo "::notice::Too large for the scanner's AI analysis, in parts of $PLUGINS_DIR/$PLUGIN this PR does not change (reported only): ${BUDGET_OTHER}"
+            fi
+          fi
+          if [ -n "$BUDGET_FAILED" ]; then
+            echo "::error::The size check of $PLUGINS_DIR/$PLUGIN could not run; see the log above. Failing closed."
+            STATUS=error
+          fi
+          if [ -s /tmp/scan-results/unreadable-paths.txt ]; then
+            echo "::error::The AI analysis cannot read these plugin-level files of $PLUGINS_DIR/$PLUGIN, because of ')', a leading '#' or '..' in their path: $(tr '\n' ' ' < /tmp/scan-results/unreadable-paths.txt)Rename them."
+            STATUS=error
+          fi
+          echo "scan_status=$STATUS" >> "$GITHUB_OUTPUT"
+          # Uploaded with the report, so the summary in skill-scan-result knows this job's outcome,
+          # including a failure that is not a finding.
+          printf '%s\n' "$STATUS" > /tmp/scan-results/scan_status
         env:
           PLUGIN: ${{ matrix.plugin }}
           TIER_INPUT: ${{ needs.select-plugins.outputs.tier }}
+          SCOPE: ${{ needs.select-plugins.outputs.scope }}
+          CHANGED_UNITS: ${{ toJSON(fromJSON(needs.select-plugins.outputs.units || '{}')[matrix.plugin]) }}
           SECRET_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           SECRET_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SECRET_VIRUSTOTAL: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       # ── Phase 3: Results ──────────────────────────────────────────────
-      # Annotation runs first so that results.json contains GitHub URLs when the
-      # summary script reads it — skill and file paths become directly usable as hrefs.
+      # Annotation turns runner paths into GitHub URLs before the upload, so the summary in
+      # skill-scan-result can use skill and file paths directly as hrefs. That job writes the
+      # only summary of the run; a per-plugin summary here would repeat it.
 
       - name: Annotate results with repo URL
         if: always()
@@ -342,51 +798,34 @@ jobs:
           REPO_URL: https://github.com/${{ github.repository }}
           SCANNED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Publish step summary
-        if: always()
-        # Reporting must never decide the build. Without this a crash here fails the job
-        # and, worse, skips the findings gate below, so real findings go unreported.
-        continue-on-error: true
-        env:
-          REPO_URL: https://github.com/${{ github.repository }}
-          SCAN_MODE: ${{ steps.scan.outputs.effective_tier || 'advanced-1' }}
-          RUN_ID: ${{ github.run_id }}
-          REPO: ${{ github.repository }}
-          SCANNED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: uv run scripts/skill_scan_summary.py
-
       - name: Upload scan artifact
         if: always()
         #   gh api repos/actions/upload-artifact/git/refs/tags/v7 --jq '.object.sha'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: skill-scan-${{ steps.scan.outputs.effective_tier || 'advanced-1' }}-${{ matrix.plugin }}-results-${{ github.run_id }}
+          name: skill-scan-${{ needs.select-plugins.outputs.tier }}-${{ matrix.plugin }}-results-${{ github.run_id }}
           path: /tmp/scan-results/
           retention-days: 30
 
       - name: Fail on Critical and High severity findings or scanner error
-        # TODO: the 'findings' branch below is unreachable today — scan_status is only ever
-        # "clean" or "error" until --fail-on-severity is added to the scan command above.
-        # This step therefore currently guards against scanner failures only, not findings.
         # always() so the security gate is still evaluated when an earlier step failed.
         if: always() && (steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error')
         env:
           PLUGIN: ${{ matrix.plugin }}
           SCAN_STATUS: ${{ steps.scan.outputs.scan_status }}
           SCAN_EXIT: ${{ steps.scan.outputs.scan_exit }}
-          TIER: ${{ steps.scan.outputs.effective_tier }}
+          TIER: ${{ needs.select-plugins.outputs.tier }}
         run: |
           if [ "$SCAN_STATUS" = "error" ]; then
             echo "::error::Skill scanner ($TIER) crashed or produced no output for $PLUGINS_DIR/$PLUGIN (exit $SCAN_EXIT). Failing closed."
           else
-            echo "::error::Skill scanner ($TIER) found high-severity issues in $PLUGINS_DIR/$PLUGIN. Review the job summary and the uploaded JSON artifact."
+            echo "::error::Skill scanner ($TIER) found critical or high findings in $PLUGINS_DIR/$PLUGIN. Review them in the summary of the skill-scan-result job of this run, or in the uploaded JSON artifact; fix the cause, or explain a false positive in the PR."
           fi
           exit 1
 
   # ── Phase 4: Report and gate ──────────────────────────────────────────
-  # Sharding the scan also shards its step summary, so this job stitches the
-  # per-plugin results back into the single whole-repository report, and is a
+  # Sharding the scan also shards its results, so this job stitches the per-plugin
+  # results back into the run's only summary, one section per plugin, and is a
   # stable status check present on every run — including runs where the matrix is
   # empty. Use this job as the required check, not the matrix jobs: their names
   # change with the selected plugins.
@@ -408,12 +847,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Install uv
-        if: always()
-        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
-        with:
-          version: 0.6.14
-          enable-cache: false
 
       - name: Download per-plugin scan results
         if: always()
@@ -426,20 +859,22 @@ jobs:
         with:
           pattern: skill-scan-*-results-${{ github.run_id }}
           path: /tmp/all-scan-results
-          merge-multiple: false # Keep one directory per plugin; names would collide otherwise
+          merge-multiple: false # One directory per artifact; a lone match lands flat in path, named by its plugin file
 
       - name: Publish consolidated step summary
         if: always()
         continue-on-error: true # Reporting must never decide the build; the gate below does
         env:
           RESULTS_DIR: /tmp/all-scan-results
+          SELECT_RESULT: ${{ needs.select-plugins.result }}
+          SELECTED_PLUGINS: ${{ needs.select-plugins.outputs.plugins }}
           REPO_URL: https://github.com/${{ github.repository }}
           SCAN_MODE: ${{ needs.select-plugins.outputs.tier }}
           RUN_ID: ${{ github.run_id }}
           REPO: ${{ github.repository }}
           SCANNED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: uv run scripts/skill_scan_summary.py
+        run: python3 scripts/skill_scan_summary.py # Standard library only: the runner's Python is enough
 
       - name: Check scan outcome
         if: always() # The gate must run even if the report above could not be rendered
