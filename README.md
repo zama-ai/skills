@@ -25,30 +25,33 @@ All three install together. Their descriptions route protocol questions to `zama
 /plugin install zama-protocol@zama-skills
 ```
 
-Update later with `/plugin marketplace update zama-skills`.
+To update, run from a terminal, then restart Claude Code:
+
+```bash
+claude plugin marketplace update zama-skills
+claude plugin update zama-protocol@zama-skills
+```
 
 ### Any AI agent (via `npx skills`)
 
 ```bash
-npx skills add zama-ai/skills
+npx skills add zama-ai/skills -g
 ```
 
-Add `--list` to pick which skills to install: `npx skills add zama-ai/skills --list`.
-
-Prefer a global install under `~/.agents` over per-project. Update later with `npx skills update`.
+`-g` installs into `~/.agents/skills` and links the skills into each agent it detects. Omit it for a per-project install. `--list` shows the skills, and `--skill zama-solidity` installs one. Update later with `npx skills update -g`.
 
 ### Codex
 
 ```bash
 codex plugin marketplace add zama-ai/skills
-# then open /plugins in Codex and pick the Zama plugin
+codex plugin add zama-protocol@zama-skills
 ```
 
-Codex reads `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json` from the repo. Update later with `codex plugin marketplace upgrade zama-skills`.
+You can also install it from `/plugins` inside Codex. To update, run `codex plugin marketplace upgrade zama-skills`, then `codex plugin add zama-protocol@zama-skills` again.
 
 ### Cursor
 
-Cursor rules live under `.cursor/rules/`: one `.mdc` per skill plus one per reference (e.g. `zama-protocol-zama-solidity--erc7984.mdc`). Clone the repository once, then generate the rules into your project. Run the same commands to update:
+Cursor rules live under `.cursor/rules/`: one `.mdc` per skill plus one per reference (e.g. `zama-protocol-zama-solidity--erc7984.mdc`). Clone the repository once, then generate the rules into your project with [uv](https://docs.astral.sh/uv/). To update, run the last two commands again:
 
 ```bash
 git clone https://github.com/zama-ai/skills.git ~/src/zama-skills   # first time only
