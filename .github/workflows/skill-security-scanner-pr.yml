@@ -33,12 +33,11 @@ name: skill-security-scanner-pr
 #   skill folders (scripts shared by several skills, hooks, commands, agents, MCP and plugin
 #   configuration) as one generated package, and reports them under the plugin directory.
 #   A repository that is itself one plugin (its marketplace installs it from "./") keeps its
-#   skills under PLUGINS_DIR, but its components (.claude-plugin/plugin.json, .mcp.json,
-#   .lsp.json, hooks/, commands/, agents/ and the paths plugin.json lists) sit at PLUGIN_ROOT,
-#   outside every plugin directory. With PLUGIN_ROOT set, one more job, "plugin-root", scans
-#   those components as plugin-level files: on a pull request when it changes one of them, and
-#   on a manual run when there are any. Other files at the root are not part of it: a script a
-#   hook runs belongs in hooks/.
+#   skills under PLUGINS_DIR, inside the plugin at PLUGIN_ROOT. Every other file of that plugin
+#   (manifests, marketplace entries, hooks, commands, agents, MCP configuration and any script
+#   they run) is outside every plugin directory. With PLUGIN_ROOT set, one more job,
+#   "plugin-root", scans those files as the plugin's plugin-level part, with the same rule as
+#   any plugin: on a pull request that changes any file of the plugin, and on a manual run.
 #
 # Scan tiers:
 #   simple      — static + behavioral analyzers only; no API keys; for workflow testing.
@@ -209,40 +208,30 @@ jobs:
             echo "::notice::The base commit of this pull request is missing, so every plugin is scanned and every critical or high finding counts."
           fi
 
-          # The plugin at PLUGIN_ROOT (see "Scan scope" above): its components outside PLUGINS_DIR
-          # get one more scan job, "plugin-root", whose only part is plugin-level ("") and counts.
+          # The plugin at PLUGIN_ROOT (see "Scan scope" above): its files outside PLUGINS_DIR get one
+          # more scan job, "plugin-root", whose only part is plugin-level (""). Like the plugin-level
+          # part of any plugin, it counts whenever the PR changes a file of the plugin, also a skill.
           ROOT_STAGE=""
           if [ -n "$PLUGIN_ROOT" ]; then
             case "/$PLUGIN_ROOT/" in
               //*|*/../*) echo "::error::PLUGIN_ROOT must be a relative path inside the repository: $PLUGIN_ROOT"; exit 1 ;;
             esac
+            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
+            # A wrong value would silently scan nothing at the root, so it must name a plugin.
+            if ! git cat-file -e "$HEAD_SHA:${ROOT_PREFIX}.claude-plugin/plugin.json" 2>/dev/null; then
+              echo "::error::PLUGIN_ROOT ($PLUGIN_ROOT) has no .claude-plugin/plugin.json file, so it is not a plugin (a symlinked .claude-plugin is not accepted). Fix PLUGIN_ROOT."
+              exit 1
+            fi
             if [ -e "$PLUGINS_DIR/plugin-root" ]; then
               echo "::error::$PLUGINS_DIR/plugin-root has the name of the job that scans PLUGIN_ROOT. Rename it."
               exit 1
             fi
-            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
-            # root_components <commit>: the component locations of that plugin in a commit, as
-            # literal pathspecs: the defaults, and the relative paths plugin.json lists. A path
-            # that is absolute or has ".." is skipped, as in the scan job.
-            root_components() {
-              printf '%s\n' "${ROOT_PREFIX}.claude-plugin/plugin.json" "${ROOT_PREFIX}.mcp.json" "${ROOT_PREFIX}.lsp.json" \
-                "${ROOT_PREFIX}hooks" "${ROOT_PREFIX}commands" "${ROOT_PREFIX}agents"
-              { git show "$1:${ROOT_PREFIX}.claude-plugin/plugin.json" 2>/dev/null || true; } \
-                | { jq -r '[.commands, .agents, .hooks, .mcpServers, .lspServers, .outputStyles][]
-                      | if type == "string" then . elif type == "array" then .[] | strings else empty end' 2>/dev/null || true; } \
-                | while IFS= read -r c; do
-                    c="${c#./}"
-                    c="${c%/}"
-                    case "/$c/" in //*|*/../*) continue ;; esac
-                    printf '%s\n' "${ROOT_PREFIX}$c"
-                  done
-            }
-            ROOT_STAGE=$(root_components "$HEAD_SHA" | sort -u \
-              | xargs -r -d '\n' git -c core.quotePath=false --literal-pathspecs ls-files -s --)
+            # in_root: the paths on stdin that belong to the plugin at PLUGIN_ROOT but not to PLUGINS_DIR.
+            in_root() { awk -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" 'index($0, r) == 1 && index($0, p) != 1'; }
+            ROOT_STAGE=$(git -c core.quotePath=false ls-files -s | awk -F '\t' -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" 'index($2, r) == 1 && index($2, p) != 1')
             if [ "$SCOPE" = changed ]; then
-              # A changed component in the base or the head counts, so deleting a hook does too.
-              ROOT_CHANGED=$({ root_components "$BASE_SHA"; root_components "$HEAD_SHA"; } | sort -u \
-                | xargs -r -d '\n' git -c core.quotePath=false --literal-pathspecs diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" --)
+              ROOT_CHANGED=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" | in_root)
+              if [ -n "$SELECTED" ]; then ROOT_CHANGED="${ROOT_CHANGED}a skill"; fi
             else
               ROOT_CHANGED="$ROOT_STAGE"
             fi
@@ -273,11 +262,26 @@ jobs:
           ODD=$(printf '%s\n%s\n' "$TREE" "$CHANGED" | grep '^"' || true)
           # A backtick, "<", ">" or "|" in a file name would break the job summary's code spans,
           # HTML and table rows; no plugin needs them.
-          # The components at PLUGIN_ROOT, if set, are checked like the files under PLUGINS_DIR.
+          # The files of the plugin at PLUGIN_ROOT, if set, are checked too. There a symlink is
+          # accepted when it points to a path inside that plugin, which is scanned as a file of its
+          # own (zama-ai/skills links CLAUDE.md to AGENTS.md); one that points out of it is not.
           BADNAMES=$({ git -c core.quotePath=false ls-files -- "$PLUGINS_DIR"; printf '%s\n' "$ROOT_STAGE" | cut -s -f2-; } \
             | grep -E '[`<>|]' || true)
-          LINKS=$({ git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR"; printf '%s\n' "$ROOT_STAGE"; } \
+          LINKS=$(git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR" \
             | awk -F '\t' '{ split($1, m, " ") } m[1] == "120000" || m[1] == "160000" { print $2 }')
+          if [ -n "$ROOT_STAGE" ]; then
+            ROOT_BASE=$(realpath -m -s "./$PLUGIN_ROOT")
+            while IFS=$'\t' read -r meta f; do
+              set -- $meta
+              case "$1" in
+                160000) LINKS="${LINKS}${LINKS:+$'\n'}$f" ;;
+                120000)
+                  t=$(git cat-file -p "$2")
+                  case "$t" in /*) r=/ ;; *) r=$(realpath -m -s "./$(dirname "$f")/$t") ;; esac
+                  case "$r/" in "$ROOT_BASE"/*) ;; *) LINKS="${LINKS}${LINKS:+$'\n'}$f -> $t" ;; esac ;;
+              esac
+            done <<< "$ROOT_STAGE"
+          fi
           MISPLACED=$(printf '%s\n' "$TREE" | grep -iE '(^|/)skill\.md$' \
             | awk -v p="$PLUGINS_DIR/" '{ rel = substr($0, length(p) + 1) }
                 !(index($0, p) == 1 && (rel ~ /^[^\/]+\/SKILL\.md$/ || rel ~ /^[^\/]+\/skills\/[^\/]+\/SKILL\.md$/))' || true)
@@ -286,10 +290,10 @@ jobs:
             PROBLEMS="${PROBLEMS}Paths with control characters, quotes or backslashes: $(printf '%s\n' "$ODD" | tr '\n' ' '). "
           fi
           if [ -n "$BADNAMES" ]; then
-            PROBLEMS="${PROBLEMS}File names with a backtick, '<', '>' or '|' under $PLUGINS_DIR or among the PLUGIN_ROOT components, which would break the job summary: $(printf '%s\n' "$BADNAMES" | tr '\n' ' '). "
+            PROBLEMS="${PROBLEMS}File names with a backtick, '<', '>' or '|' under $PLUGINS_DIR or PLUGIN_ROOT, which would break the job summary: $(printf '%s\n' "$BADNAMES" | tr '\n' ' '). "
           fi
           if [ -n "$LINKS" ]; then
-            PROBLEMS="${PROBLEMS}Symlinks or submodules under $PLUGINS_DIR or among the PLUGIN_ROOT components, which the scanner does not follow: $(printf '%s\n' "$LINKS" | tr '\n' ' '). "
+            PROBLEMS="${PROBLEMS}Symlinks or submodules under $PLUGINS_DIR, or symlinks out of the plugin at PLUGIN_ROOT, which the scanner does not follow: $(printf '%s\n' "$LINKS" | tr '\n' ' '). "
           fi
           if [ -n "$MISPLACED" ]; then
             PROBLEMS="${PROBLEMS}Skill files that are not <plugin>/skills/<name>/SKILL.md (or <plugin>/SKILL.md for a bare skill) under $PLUGINS_DIR: $(printf '%s\n' "$MISPLACED" | tr '\n' ' '). "
@@ -375,22 +379,27 @@ jobs:
                 .claude-plugin/plugin.json 2>/dev/null || true; } \
               | while IFS= read -r c; do
                   c="${c#./}"
-                  case "/$c/" in //*|*/../*) continue ;; esac
+                  c="${c%/}"
+                  # "" and "." would make the whole plugin a component.
+                  case "/$c/" in //*|/./|*/../*) continue ;; esac
                   # "./" first, so a path that starts with "-" cannot become a find option.
                   find "./$c" -type f -print 2>/dev/null || true
                 done
           }
 
           if [ "$PLUGIN" = plugin-root ]; then
-            # The plugin at PLUGIN_ROOT: only its components, copied into an empty directory that
-            # is scanned like a plugin without skills, so they form its plugin-level part. Its
-            # report points at PLUGIN_ROOT.
+            # The plugin at PLUGIN_ROOT: its files outside PLUGINS_DIR (and .git), copied into an
+            # empty directory that is scanned like a plugin without skills, so they all form its
+            # plugin-level part. select-plugins refuses a SKILL.md there. A symlink is left out, as
+            # the scanner does; select-plugins accepts only one that points to a scanned file.
             LABEL="the plugin at PLUGIN_ROOT ($PLUGIN_ROOT)"
-            REPORT_DIR="$GITHUB_WORKSPACE/$PLUGIN_ROOT"
+            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
+            REPORT_DIR="$GITHUB_WORKSPACE${ROOT_PREFIX:+/${ROOT_PREFIX%/}}"
             SCAN_TARGET=/tmp/plugin-root/plugin
             rm -rf /tmp/plugin-root
             mkdir -p "$SCAN_TARGET"
-            (cd "$REPORT_DIR" && list_components | xargs -r -d '\n' cp --parents -t "$SCAN_TARGET" --)
+            (cd "$REPORT_DIR" && find . -path ./.git -prune -o -path "./${PLUGINS_DIR#"$ROOT_PREFIX"}" -prune -o -type f -print \
+              | xargs -r -d '\n' cp --parents -t "$SCAN_TARGET" --)
           else
             LABEL="$PLUGINS_DIR/$PLUGIN"
             SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
