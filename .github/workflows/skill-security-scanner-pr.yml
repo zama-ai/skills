@@ -20,7 +20,7 @@ name: skill-security-scanner-pr
 #
 # Copy of zama-ai/ai-security .github/workflows/skill-security-scanner-pr.yml (the canonical
 # version), with scripts/skill_scan_summary.py and scripts/skill_scan_budget.py. Keep them in sync
-# with that repository: only PLUGINS_DIR below and the scripts' uv headers differ.
+# with that repository: only PLUGINS_DIR and PLUGIN_ROOT below and the scripts' uv headers differ.
 #
 # Scan scope:
 #   The scanner's `scan-all` walks skills strictly serially and issues one LLM call per
@@ -32,6 +32,13 @@ name: skill-security-scanner-pr
 #   no file outside that folder. So each plugin job also scans the plugin's files outside its
 #   skill folders (scripts shared by several skills, hooks, commands, agents, MCP and plugin
 #   configuration) as one generated package, and reports them under the plugin directory.
+#   A repository that is itself one plugin (its marketplace installs it from "./") keeps its
+#   skills under PLUGINS_DIR, but its components (.claude-plugin/plugin.json, .mcp.json,
+#   .lsp.json, hooks/, commands/, agents/ and the paths plugin.json lists) sit at PLUGIN_ROOT,
+#   outside every plugin directory. With PLUGIN_ROOT set, one more job, "plugin-root", scans
+#   those components as plugin-level files: on a pull request when it changes one of them, and
+#   on a manual run when there are any. Other files at the root are not part of it: a script a
+#   hook runs belongs in hooks/.
 #
 # Scan tiers:
 #   simple      — static + behavioral analyzers only; no API keys; for workflow testing.
@@ -89,9 +96,11 @@ on:
 permissions: {}
 
 env:
-  # The only repo-specific setting. Here every sub-directory is a single skill rather than a
-  # plugin, so each matrix job scans one skill (ai-security uses local-marketplace/plugins).
+  # Repo-specific settings. Here every sub-directory is a single skill rather than a plugin, so
+  # each matrix job scans one skill (ai-security uses local-marketplace/plugins). The repository
+  # itself is the plugin (its marketplace installs it from "./"), so PLUGIN_ROOT is its root.
   PLUGINS_DIR: skills
+  PLUGIN_ROOT: .
 
 concurrency:
   group: skill-security-scanner-pr-${{ github.repository }}-${{ github.ref }}
@@ -199,6 +208,51 @@ jobs:
           elif [ "$EVENT_NAME" = "pull_request" ]; then
             echo "::notice::The base commit of this pull request is missing, so every plugin is scanned and every critical or high finding counts."
           fi
+
+          # The plugin at PLUGIN_ROOT (see "Scan scope" above): its components outside PLUGINS_DIR
+          # get one more scan job, "plugin-root", whose only part is plugin-level ("") and counts.
+          ROOT_STAGE=""
+          if [ -n "$PLUGIN_ROOT" ]; then
+            case "/$PLUGIN_ROOT/" in
+              //*|*/../*) echo "::error::PLUGIN_ROOT must be a relative path inside the repository: $PLUGIN_ROOT"; exit 1 ;;
+            esac
+            if [ -e "$PLUGINS_DIR/plugin-root" ]; then
+              echo "::error::$PLUGINS_DIR/plugin-root has the name of the job that scans PLUGIN_ROOT. Rename it."
+              exit 1
+            fi
+            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
+            # root_components <commit>: the component locations of that plugin in a commit, as
+            # literal pathspecs: the defaults, and the relative paths plugin.json lists. A path
+            # that is absolute or has ".." is skipped, as in the scan job.
+            root_components() {
+              printf '%s\n' "${ROOT_PREFIX}.claude-plugin/plugin.json" "${ROOT_PREFIX}.mcp.json" "${ROOT_PREFIX}.lsp.json" \
+                "${ROOT_PREFIX}hooks" "${ROOT_PREFIX}commands" "${ROOT_PREFIX}agents"
+              { git show "$1:${ROOT_PREFIX}.claude-plugin/plugin.json" 2>/dev/null || true; } \
+                | { jq -r '[.commands, .agents, .hooks, .mcpServers, .lspServers, .outputStyles][]
+                      | if type == "string" then . elif type == "array" then .[] | strings else empty end' 2>/dev/null || true; } \
+                | while IFS= read -r c; do
+                    c="${c#./}"
+                    c="${c%/}"
+                    case "/$c/" in //*|*/../*) continue ;; esac
+                    printf '%s\n' "${ROOT_PREFIX}$c"
+                  done
+            }
+            ROOT_STAGE=$(root_components "$HEAD_SHA" | sort -u \
+              | xargs -r -d '\n' git -c core.quotePath=false --literal-pathspecs ls-files -s --)
+            if [ "$SCOPE" = changed ]; then
+              # A changed component in the base or the head counts, so deleting a hook does too.
+              ROOT_CHANGED=$({ root_components "$BASE_SHA"; root_components "$HEAD_SHA"; } | sort -u \
+                | xargs -r -d '\n' git -c core.quotePath=false --literal-pathspecs diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" --)
+            else
+              ROOT_CHANGED="$ROOT_STAGE"
+            fi
+            if [ -n "$ROOT_CHANGED" ]; then
+              SELECTED=$(printf '%s\n%s\n' "$SELECTED" plugin-root | grep . || true)
+              if [ "$SCOPE" = changed ]; then
+                UNITS=$(jq -c '. + {"plugin-root": [""]}' <<< "$UNITS")
+              fi
+            fi
+          fi
           echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
           echo "units=$UNITS" >> "$GITHUB_OUTPUT"
 
@@ -219,8 +273,10 @@ jobs:
           ODD=$(printf '%s\n%s\n' "$TREE" "$CHANGED" | grep '^"' || true)
           # A backtick, "<", ">" or "|" in a file name would break the job summary's code spans,
           # HTML and table rows; no plugin needs them.
-          BADNAMES=$(git -c core.quotePath=false ls-files -- "$PLUGINS_DIR" | grep -E '[`<>|]' || true)
-          LINKS=$(git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR" \
+          # The components at PLUGIN_ROOT, if set, are checked like the files under PLUGINS_DIR.
+          BADNAMES=$({ git -c core.quotePath=false ls-files -- "$PLUGINS_DIR"; printf '%s\n' "$ROOT_STAGE" | cut -s -f2-; } \
+            | grep -E '[`<>|]' || true)
+          LINKS=$({ git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR"; printf '%s\n' "$ROOT_STAGE"; } \
             | awk -F '\t' '{ split($1, m, " ") } m[1] == "120000" || m[1] == "160000" { print $2 }')
           MISPLACED=$(printf '%s\n' "$TREE" | grep -iE '(^|/)skill\.md$' \
             | awk -v p="$PLUGINS_DIR/" '{ rel = substr($0, length(p) + 1) }
@@ -230,10 +286,10 @@ jobs:
             PROBLEMS="${PROBLEMS}Paths with control characters, quotes or backslashes: $(printf '%s\n' "$ODD" | tr '\n' ' '). "
           fi
           if [ -n "$BADNAMES" ]; then
-            PROBLEMS="${PROBLEMS}File names with a backtick, '<', '>' or '|' under $PLUGINS_DIR, which would break the job summary: $(printf '%s\n' "$BADNAMES" | tr '\n' ' '). "
+            PROBLEMS="${PROBLEMS}File names with a backtick, '<', '>' or '|' under $PLUGINS_DIR or among the PLUGIN_ROOT components, which would break the job summary: $(printf '%s\n' "$BADNAMES" | tr '\n' ' '). "
           fi
           if [ -n "$LINKS" ]; then
-            PROBLEMS="${PROBLEMS}Symlinks or submodules under $PLUGINS_DIR, which the scanner does not follow: $(printf '%s\n' "$LINKS" | tr '\n' ' '). "
+            PROBLEMS="${PROBLEMS}Symlinks or submodules under $PLUGINS_DIR or among the PLUGIN_ROOT components, which the scanner does not follow: $(printf '%s\n' "$LINKS" | tr '\n' ' '). "
           fi
           if [ -n "$MISPLACED" ]; then
             PROBLEMS="${PROBLEMS}Skill files that are not <plugin>/skills/<name>/SKILL.md (or <plugin>/SKILL.md for a bare skill) under $PLUGINS_DIR: $(printf '%s\n' "$MISPLACED" | tr '\n' ' '). "
@@ -307,11 +363,45 @@ jobs:
           # download-artifact extracts a lone artifact without its named directory.
           printf '%s\n' "$PLUGIN" > /tmp/scan-results/plugin
 
-          SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
-          if [ ! -d "$SCAN_TARGET" ]; then
-            echo "::error::Plugin directory not found: $PLUGINS_DIR/$PLUGIN"
-            exit 1
+          # list_components: the component files of the plugin in the current directory, which
+          # Claude Code runs whatever folder holds them: the default locations, and the relative
+          # paths of plugin.json's component fields. plugin.json can move a component to another
+          # path, also into a skill folder. A path that is absolute or has ".." is skipped: it is
+          # not a file of this plugin.
+          list_components() {
+            find .claude-plugin/plugin.json .mcp.json .lsp.json hooks commands agents -type f -print 2>/dev/null || true
+            { jq -r '[.commands, .agents, .hooks, .mcpServers, .lspServers, .outputStyles][]
+                  | if type == "string" then . elif type == "array" then .[] | strings else empty end' \
+                .claude-plugin/plugin.json 2>/dev/null || true; } \
+              | while IFS= read -r c; do
+                  c="${c#./}"
+                  case "/$c/" in //*|*/../*) continue ;; esac
+                  # "./" first, so a path that starts with "-" cannot become a find option.
+                  find "./$c" -type f -print 2>/dev/null || true
+                done
+          }
+
+          if [ "$PLUGIN" = plugin-root ]; then
+            # The plugin at PLUGIN_ROOT: only its components, copied into an empty directory that
+            # is scanned like a plugin without skills, so they form its plugin-level part. Its
+            # report points at PLUGIN_ROOT.
+            LABEL="the plugin at PLUGIN_ROOT ($PLUGIN_ROOT)"
+            REPORT_DIR="$GITHUB_WORKSPACE/$PLUGIN_ROOT"
+            SCAN_TARGET=/tmp/plugin-root/plugin
+            rm -rf /tmp/plugin-root
+            mkdir -p "$SCAN_TARGET"
+            (cd "$REPORT_DIR" && list_components | xargs -r -d '\n' cp --parents -t "$SCAN_TARGET" --)
+          else
+            LABEL="$PLUGINS_DIR/$PLUGIN"
+            SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
+            REPORT_DIR="$SCAN_TARGET"
+            if [ ! -d "$SCAN_TARGET" ]; then
+              echo "::error::Plugin directory not found: $LABEL"
+              exit 1
+            fi
           fi
+          # For the failure message of the gate step.
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
 
           TIER="$TIER_INPUT"
           echo "Effective scan tier: $TIER"
@@ -350,7 +440,7 @@ jobs:
           EXTRA_FLAGS=""
           case "$TIER" in
             simple)
-              echo "Scanning $PLUGINS_DIR/$PLUGIN (simple: static + behavioral) ..."
+              echo "Scanning $LABEL (simple: static + behavioral) ..."
               ;;
             advanced-1)
               if [ -z "$SECRET_CLAUDE_OAUTH" ]; then
@@ -368,7 +458,7 @@ jobs:
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_CLAUDE_OAUTH"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
               EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 2 --enable-meta"
-              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-1: Haiku 4.5 + VirusTotal) ..."
+              echo "Scanning $LABEL (advanced-1: Haiku 4.5 + VirusTotal) ..."
               ;;
             advanced-2)
               if [ -z "$SECRET_ANTHROPIC_API_KEY" ]; then
@@ -385,7 +475,7 @@ jobs:
               export SKILL_SCANNER_LLM_API_KEY="$SECRET_ANTHROPIC_API_KEY"
               export VIRUSTOTAL_API_KEY="$SECRET_VIRUSTOTAL"
               EXTRA_FLAGS="--use-llm --use-virustotal --llm-consensus-runs 1 --enable-meta --llm-max-tokens 16000"
-              echo "Scanning $PLUGINS_DIR/$PLUGIN (advanced-2: Haiku 5.5 + VirusTotal) ..."
+              echo "Scanning $LABEL (advanced-2: Haiku 5.5 + VirusTotal) ..."
               ;;
           esac
 
@@ -407,23 +497,9 @@ jobs:
             | awk -v dirs="$SKILL_DIRS" 'BEGIN { n = split(dirs, d, "\n") }
                 { for (i = 1; i <= n; i++) if (d[i] == "." || index($0, d[i] "/") == 1) next; print }' \
             | xargs -r -d '\n' cp --parents -t "$CODE_PKG" --)
-          # Claude Code runs these whatever folder holds them, so they always go into the package,
-          # also when a SKILL.md marks their folder as a skill (the plugin folder of a bare skill).
-          # plugin.json can move a component to another path, also into a skill folder, so the
-          # relative paths of its component fields go in too. A path that is absolute or has ".."
-          # is skipped: it is not a file of this plugin.
-          (cd "$SCAN_TARGET" && {
-              find .claude-plugin/plugin.json .mcp.json .lsp.json hooks commands agents -type f -print 2>/dev/null || true
-              { jq -r '[.commands, .agents, .hooks, .mcpServers, .lspServers, .outputStyles][]
-                    | if type == "string" then . elif type == "array" then .[] | strings else empty end' \
-                  .claude-plugin/plugin.json 2>/dev/null || true; } \
-                | while IFS= read -r c; do
-                    c="${c#./}"
-                    case "/$c/" in //*|*/../*) continue ;; esac
-                    # "./" first, so a path that starts with "-" cannot become a find option.
-                    find "./$c" -type f -print 2>/dev/null || true
-                  done
-            } | xargs -r -d '\n' cp --parents -t "$CODE_PKG" --)
+          # Components always go into the package, also when a SKILL.md marks their folder as a
+          # skill (the plugin folder of a bare skill).
+          (cd "$SCAN_TARGET" && list_components | xargs -r -d '\n' cp --parents -t "$CODE_PKG" --)
           if [ -z "$(find "$CODE_PKG" -type f -print -quit)" ]; then
             rm -rf "$CODE_PARENT"
           else
@@ -516,7 +592,7 @@ jobs:
 
           CODE_EXIT=0
           if [ -d "$CODE_PKG" ]; then
-            echo "Scanning the plugin-level files of $PLUGINS_DIR/$PLUGIN ..."
+            echo "Scanning the plugin-level files of $LABEL ..."
             # Same analyzers and flags as the skills. scan-all, not scan, so that the report has
             # the same shape as results.json and can be merged into it below.
             # shellcheck disable=SC2086
@@ -604,7 +680,7 @@ jobs:
           }
           STATUS=$(judge "$SCAN_EXIT" /tmp/scan-results/results.json /tmp/scan-results/scan.log)
           if [ "$STATUS" = error ]; then
-            echo "::error::Skill scanner exited $SCAN_EXIT for $PLUGINS_DIR/$PLUGIN without a report that explains it. Failing closed."
+            echo "::error::Skill scanner exited $SCAN_EXIT for $LABEL without a report that explains it. Failing closed."
           fi
           drop_dismissed /tmp/scan-results/results.json
 
@@ -617,14 +693,14 @@ jobs:
             # /dev/null as the log: the package always holds a skill, so "no skill found" is an error.
             case "$(judge "$CODE_EXIT" /tmp/scan-results/plugin-code.json /dev/null)" in
               error)
-                echo "::error::Skill scanner exited $CODE_EXIT for the plugin-level files of $PLUGINS_DIR/$PLUGIN without a report that explains it. Failing closed."
+                echo "::error::Skill scanner exited $CODE_EXIT for the plugin-level files of $LABEL without a report that explains it. Failing closed."
                 STATUS=error ;;
               findings)
                 [ "$STATUS" = error ] || STATUS=findings ;;
             esac
             drop_dismissed /tmp/scan-results/plugin-code.json
             if jq -e '.summary.total_skills_scanned | numbers' /tmp/scan-results/plugin-code.json > /dev/null 2>&1; then
-              jq --arg from "$CODE_PKG" --arg to "$SCAN_TARGET" \
+              jq --arg from "$CODE_PKG" --arg to "$REPORT_DIR" \
                 'walk(if type == "string" then split($from) | join($to) else . end)
                  | .results |= map(. + {plugin_level_files: true})
                  | .summary.plugin_level_parts_scanned = .summary.total_skills_scanned
@@ -690,11 +766,11 @@ jobs:
               mv /tmp/scan-results/marked.json /tmp/scan-results/results.json
               GATE_HIGH=$(jq '[.results[] | select(.changed_by_pr) | .findings[] | select(.severity == "CRITICAL" or .severity == "HIGH")] | length' /tmp/scan-results/results.json)
               if [ "$STATUS" = findings ] && [ "$GATE_HIGH" -eq 0 ]; then
-                echo "::notice::$PLUGINS_DIR/$PLUGIN has critical or high findings only in parts this PR does not change. They are in the skill-scan-result summary and do not fail this PR."
+                echo "::notice::$LABEL has critical or high findings only in parts this PR does not change. They are in the skill-scan-result summary and do not fail this PR."
                 STATUS=clean
               fi
             else
-              echo "::error::Could not match the findings of $PLUGINS_DIR/$PLUGIN to the parts this PR changes. Failing closed."
+              echo "::error::Could not match the findings of $LABEL to the parts this PR changes. Failing closed."
               STATUS=error
             fi
           fi
@@ -711,16 +787,16 @@ jobs:
           # status above is already an error.
           if [ -n "$RESULTS_CONTENT" ]; then
             if ! LLM_FAILED=$(jq '[.results[]?.findings[]? | select(.rule_id == "LLM_ANALYSIS_FAILED")] | length' /tmp/scan-results/results.json 2>/dev/null); then
-              echo "::error::Could not read the scan report for $PLUGINS_DIR/$PLUGIN."
+              echo "::error::Could not read the scan report for $LABEL."
               STATUS=error
             elif [ "$LLM_FAILED" -gt 0 ]; then
-              echo "::error::AI analysis did not complete for $LLM_FAILED skill(s) in $PLUGINS_DIR/$PLUGIN. Re-run the job; see LLM_ANALYSIS_FAILED in the report."
+              echo "::error::AI analysis did not complete for $LLM_FAILED skill(s) in $LABEL. Re-run the job; see LLM_ANALYSIS_FAILED in the report."
               STATUS=error
             fi
           fi
           # Both logs: the plugin-level scan has no log when the plugin has no file outside its skills.
           if grep -qE 'Consensus run [0-9]+ failed' /tmp/scan-results/scan.log /tmp/scan-results/plugin-code.log 2>/dev/null; then
-            echo "::error::AI analysis did not complete in $PLUGINS_DIR/$PLUGIN: $(grep -h -m1 -oE 'Consensus run [0-9]+ failed.{0,200}' /tmp/scan-results/scan.log /tmp/scan-results/plugin-code.log 2>/dev/null | head -n 1). Re-run the job, or fix the credential if this is an authentication error."
+            echo "::error::AI analysis did not complete in $LABEL: $(grep -h -m1 -oE 'Consensus run [0-9]+ failed.{0,200}' /tmp/scan-results/scan.log /tmp/scan-results/plugin-code.log 2>/dev/null | head -n 1). Re-run the job, or fix the credential if this is an authentication error."
             STATUS=error
           fi
           # Every folder that holds a SKILL.md is left out of the plugin-level package, so each one
@@ -733,7 +809,7 @@ jobs:
               printf '%s\n' "$LOADED" | grep -Fxq -- "$p" || printf '%s\n' "${d#./}/SKILL.md"
             done)
           if [ -n "$UNSCANNED" ] && [ "$STATUS" != error ]; then
-            echo "::error::The scanner could not load these SKILL.md files in $PLUGINS_DIR/$PLUGIN, so their folders were not scanned: $(printf '%s\n' "$UNSCANNED" | tr '\n' ' ')Check their frontmatter (name, description); the reason is in the log after 'Failed to load'."
+            echo "::error::The scanner could not load these SKILL.md files in $LABEL, so their folders were not scanned: $(printf '%s\n' "$UNSCANNED" | tr '\n' ' ')Check their frontmatter (name, description); the reason is in the log after 'Failed to load'."
             STATUS=error
           fi
           # On a pull request, a too-large file fails the check only in a part the PR changes, like a
@@ -755,19 +831,19 @@ jobs:
               fi
             done <<< "$BUDGET_SKIPS"
             if [ -n "$BUDGET_COUNTED" ]; then
-              echo "::error::Too large for the scanner's AI analysis, which would leave these files of $PLUGINS_DIR/$PLUGIN out: ${BUDGET_COUNTED}Split or shorten them, or raise the limits in the policy this step writes."
+              echo "::error::Too large for the scanner's AI analysis, which would leave these files of $LABEL out: ${BUDGET_COUNTED}Split or shorten them, or raise the limits in the policy this step writes."
               STATUS=error
             fi
             if [ -n "$BUDGET_OTHER" ]; then
-              echo "::notice::Too large for the scanner's AI analysis, in parts of $PLUGINS_DIR/$PLUGIN this PR does not change (reported only): ${BUDGET_OTHER}"
+              echo "::notice::Too large for the scanner's AI analysis, in parts of $LABEL this PR does not change (reported only): ${BUDGET_OTHER}"
             fi
           fi
           if [ -n "$BUDGET_FAILED" ]; then
-            echo "::error::The size check of $PLUGINS_DIR/$PLUGIN could not run; see the log above. Failing closed."
+            echo "::error::The size check of $LABEL could not run; see the log above. Failing closed."
             STATUS=error
           fi
           if [ -s /tmp/scan-results/unreadable-paths.txt ]; then
-            echo "::error::The AI analysis cannot read these plugin-level files of $PLUGINS_DIR/$PLUGIN, because of ')', a leading '#' or '..' in their path: $(tr '\n' ' ' < /tmp/scan-results/unreadable-paths.txt)Rename them."
+            echo "::error::The AI analysis cannot read these plugin-level files of $LABEL, because of ')', a leading '#' or '..' in their path: $(tr '\n' ' ' < /tmp/scan-results/unreadable-paths.txt)Rename them."
             STATUS=error
           fi
           echo "scan_status=$STATUS" >> "$GITHUB_OUTPUT"
@@ -811,15 +887,15 @@ jobs:
         # always() so the security gate is still evaluated when an earlier step failed.
         if: always() && (steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error')
         env:
-          PLUGIN: ${{ matrix.plugin }}
+          LABEL: ${{ steps.scan.outputs.label || format('{0}/{1}', env.PLUGINS_DIR, matrix.plugin) }}
           SCAN_STATUS: ${{ steps.scan.outputs.scan_status }}
           SCAN_EXIT: ${{ steps.scan.outputs.scan_exit }}
           TIER: ${{ needs.select-plugins.outputs.tier }}
         run: |
           if [ "$SCAN_STATUS" = "error" ]; then
-            echo "::error::Skill scanner ($TIER) crashed or produced no output for $PLUGINS_DIR/$PLUGIN (exit $SCAN_EXIT). Failing closed."
+            echo "::error::Skill scanner ($TIER) crashed or produced no output for $LABEL (exit $SCAN_EXIT). Failing closed."
           else
-            echo "::error::Skill scanner ($TIER) found critical or high findings in $PLUGINS_DIR/$PLUGIN. Review them in the summary of the skill-scan-result job of this run, or in the uploaded JSON artifact; fix the cause, or explain a false positive in the PR."
+            echo "::error::Skill scanner ($TIER) found critical or high findings in $LABEL. Review them in the summary of the skill-scan-result job of this run, or in the uploaded JSON artifact; fix the cause, or explain a false positive in the PR."
           fi
           exit 1
 
