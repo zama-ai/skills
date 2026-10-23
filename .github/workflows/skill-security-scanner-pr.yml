@@ -35,7 +35,7 @@ name: skill-security-scanner-pr
 #   A repository that is itself one plugin (its marketplace installs it from "./") keeps its
 #   skills under PLUGINS_DIR, inside the plugin at PLUGIN_ROOT. Every other file of that plugin
 #   (manifests, marketplace entries, hooks, commands, agents, MCP configuration and any script
-#   they run) is outside every plugin directory. With PLUGIN_ROOT set, one more job,
+#   they run, also one directly in PLUGINS_DIR) is in no plugin directory. With PLUGIN_ROOT set, one more job,
 #   "plugin-root", scans those files as the plugin's plugin-level part, with the same rule as
 #   any plugin: on a pull request that changes any file of the plugin, and on a manual run.
 #
@@ -123,6 +123,7 @@ jobs:
       tier: ${{ steps.select.outputs.tier }}
       scope: ${{ steps.select.outputs.scope }}
       units: ${{ steps.select.outputs.units }}
+      root_prefix: ${{ steps.select.outputs.root_prefix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -169,7 +170,8 @@ jobs:
             # core.quotePath=false: git otherwise prints non-ASCII paths quoted and escaped, which
             # no prefix or name match below would recognise. --no-renames lists a moved file at its
             # old and its new path, so moving a file out of a skill also changes that skill.
-            CHANGED=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" -- "$PLUGINS_DIR")
+            CHANGED_ALL=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA")
+            CHANGED=$(printf '%s\n' "$CHANGED_ALL" | awk -v p="$PLUGINS_DIR/" 'substr($0, 1, length(p)) == p')
             SELECTED=$(printf '%s\n' "$CHANGED" \
               | awk -v p="$PLUGINS_DIR/" 'index($0, p) == 1 { n = split(substr($0, length(p) + 1), a, "/"); if (n > 1) print a[1] }' \
               | sort -u \
@@ -177,6 +179,7 @@ jobs:
           else
             REASON="full scan"
             SCOPE=all
+            CHANGED_ALL=""
             CHANGED=""
             SELECTED=$(find "$PLUGINS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           fi
@@ -208,15 +211,24 @@ jobs:
             echo "::notice::The base commit of this pull request is missing, so every plugin is scanned and every critical or high finding counts."
           fi
 
-          # The plugin at PLUGIN_ROOT (see "Scan scope" above): its files outside PLUGINS_DIR get one
-          # more scan job, "plugin-root", whose only part is plugin-level (""). Like the plugin-level
-          # part of any plugin, it counts whenever the PR changes a file of the plugin, also a skill.
+          # The plugin at PLUGIN_ROOT (see "Scan scope" above): its files that are in no plugin
+          # directory get one more scan job, "plugin-root", whose only part is plugin-level ("").
+          # Those are its files outside PLUGINS_DIR and the files directly in PLUGINS_DIR. Like the
+          # plugin-level part of any plugin, it counts whenever the PR changes a file of the plugin,
+          # also one under PLUGINS_DIR, deleted or not.
           ROOT_STAGE=""
+          ROOT_PREFIX=""
           if [ -n "$PLUGIN_ROOT" ]; then
-            case "/$PLUGIN_ROOT/" in
-              //*|*/../*) echo "::error::PLUGIN_ROOT must be a relative path inside the repository: $PLUGIN_ROOT"; exit 1 ;;
+            # One spelling of the root ("" or "dir/"), so that path prefixes match what git prints.
+            r="$PLUGIN_ROOT"
+            while [ "${r#./}" != "$r" ]; do r="${r#./}"; done
+            r="${r%/}"
+            if [ "$r" = . ]; then r=""; fi
+            case "/$r/" in
+              //) ;;
+              //*|*//*|*/./*|*/../*) echo "::error::PLUGIN_ROOT must be a plain relative path inside the repository: $PLUGIN_ROOT"; exit 1 ;;
             esac
-            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
+            ROOT_PREFIX="${r:+$r/}"
             # A wrong value would silently scan nothing at the root, so it must name a plugin.
             if ! git cat-file -e "$HEAD_SHA:${ROOT_PREFIX}.claude-plugin/plugin.json" 2>/dev/null; then
               echo "::error::PLUGIN_ROOT ($PLUGIN_ROOT) has no .claude-plugin/plugin.json file, so it is not a plugin (a symlinked .claude-plugin is not accepted). Fix PLUGIN_ROOT."
@@ -226,22 +238,28 @@ jobs:
               echo "::error::$PLUGINS_DIR/plugin-root has the name of the job that scans PLUGIN_ROOT. Rename it."
               exit 1
             fi
-            # in_root: the paths on stdin that belong to the plugin at PLUGIN_ROOT but not to PLUGINS_DIR.
-            in_root() { awk -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" 'index($0, r) == 1 && index($0, p) != 1'; }
-            ROOT_STAGE=$(git -c core.quotePath=false ls-files -s | awk -F '\t' -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" 'index($2, r) == 1 && index($2, p) != 1')
+            # in_root(s): s is a file of the plugin at PLUGIN_ROOT in no plugin directory. substr, not
+            # index: awks differ on index(s, "") for the empty prefix of PLUGIN_ROOT ".".
+            IN_ROOT='function starts(s, x) { return substr(s, 1, length(x)) == x }
+              function in_root(s) { return starts(s, r) && !(starts(s, p) && index(substr(s, length(p) + 1), "/") > 0) }'
+            ROOT_STAGE=$(git -c core.quotePath=false ls-files -s \
+              | awk -F '\t' -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" "$IN_ROOT"' in_root($2)')
+            ROOT_RUN=""
             if [ "$SCOPE" = changed ]; then
-              ROOT_CHANGED=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA" | in_root)
-              if [ -n "$SELECTED" ]; then ROOT_CHANGED="${ROOT_CHANGED}a skill"; fi
-            else
-              ROOT_CHANGED="$ROOT_STAGE"
+              if [ -n "$CHANGED" ] || [ -n "$(printf '%s\n' "$CHANGED_ALL" | awk -v r="$ROOT_PREFIX" -v p="$PLUGINS_DIR/" "$IN_ROOT"' in_root($0)')" ]; then
+                ROOT_RUN=1
+              fi
+            elif [ -n "$ROOT_STAGE" ]; then
+              ROOT_RUN=1
             fi
-            if [ -n "$ROOT_CHANGED" ]; then
+            if [ -n "$ROOT_RUN" ]; then
               SELECTED=$(printf '%s\n%s\n' "$SELECTED" plugin-root | grep . || true)
               if [ "$SCOPE" = changed ]; then
                 UNITS=$(jq -c '. + {"plugin-root": [""]}' <<< "$UNITS")
               fi
             fi
           fi
+          echo "root_prefix=$ROOT_PREFIX" >> "$GITHUB_OUTPUT"
           echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
           echo "units=$UNITS" >> "$GITHUB_OUTPUT"
 
@@ -263,21 +281,22 @@ jobs:
           # A backtick, "<", ">" or "|" in a file name would break the job summary's code spans,
           # HTML and table rows; no plugin needs them.
           # The files of the plugin at PLUGIN_ROOT, if set, are checked too. There a symlink is
-          # accepted when it points to a path inside that plugin, which is scanned as a file of its
-          # own (zama-ai/skills links CLAUDE.md to AGENTS.md); one that points out of it is not.
+          # accepted when it resolves to a path inside that plugin, which is scanned as a file of its
+          # own (zama-ai/skills links CLAUDE.md to AGENTS.md). It is resolved through the checked-out
+          # tree, so a chain of links counts; one that cannot be resolved is refused.
           BADNAMES=$({ git -c core.quotePath=false ls-files -- "$PLUGINS_DIR"; printf '%s\n' "$ROOT_STAGE" | cut -s -f2-; } \
             | grep -E '[`<>|]' || true)
           LINKS=$(git -c core.quotePath=false ls-files -s -- "$PLUGINS_DIR" \
             | awk -F '\t' '{ split($1, m, " ") } m[1] == "120000" || m[1] == "160000" { print $2 }')
           if [ -n "$ROOT_STAGE" ]; then
-            ROOT_BASE=$(realpath -m -s "./$PLUGIN_ROOT")
+            ROOT_BASE=$(realpath -m "./$ROOT_PREFIX")
             while IFS=$'\t' read -r meta f; do
               set -- $meta
               case "$1" in
                 160000) LINKS="${LINKS}${LINKS:+$'\n'}$f" ;;
                 120000)
                   t=$(git cat-file -p "$2")
-                  case "$t" in /*) r=/ ;; *) r=$(realpath -m -s "./$(dirname "$f")/$t") ;; esac
+                  case "$t" in /*) r=/ ;; *) r=$(realpath -m -- "./$(dirname "$f")/$t" 2>/dev/null) || r=/ ;; esac
                   case "$r/" in "$ROOT_BASE"/*) ;; *) LINKS="${LINKS}${LINKS:+$'\n'}$f -> $t" ;; esac ;;
               esac
             done <<< "$ROOT_STAGE"
@@ -393,15 +412,17 @@ jobs:
             # plugin-level part. select-plugins refuses a SKILL.md there. A symlink is left out, as
             # the scanner does; select-plugins accepts only one that points to a scanned file.
             LABEL="the plugin at PLUGIN_ROOT ($PLUGIN_ROOT)"
-            if [ "$PLUGIN_ROOT" = . ]; then ROOT_PREFIX=""; else ROOT_PREFIX="${PLUGIN_ROOT%/}/"; fi
+            echo "label=$LABEL" >> "$GITHUB_OUTPUT"
             REPORT_DIR="$GITHUB_WORKSPACE${ROOT_PREFIX:+/${ROOT_PREFIX%/}}"
             SCAN_TARGET=/tmp/plugin-root/plugin
             rm -rf /tmp/plugin-root
             mkdir -p "$SCAN_TARGET"
-            (cd "$REPORT_DIR" && find . -path ./.git -prune -o -path "./${PLUGINS_DIR#"$ROOT_PREFIX"}" -prune -o -type f -print \
+            # Plugin directories under PLUGINS_DIR are pruned; files directly in it are kept.
+            (cd "$REPORT_DIR" && find . -path ./.git -prune -o -path "./${PLUGINS_DIR#"$ROOT_PREFIX"}/*" -type d -prune -o -type f -print \
               | xargs -r -d '\n' cp --parents -t "$SCAN_TARGET" --)
           else
             LABEL="$PLUGINS_DIR/$PLUGIN"
+            echo "label=$LABEL" >> "$GITHUB_OUTPUT"
             SCAN_TARGET="$GITHUB_WORKSPACE/$PLUGINS_DIR/$PLUGIN"
             REPORT_DIR="$SCAN_TARGET"
             if [ ! -d "$SCAN_TARGET" ]; then
@@ -409,8 +430,6 @@ jobs:
               exit 1
             fi
           fi
-          # For the failure message of the gate step.
-          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
 
           TIER="$TIER_INPUT"
           echo "Effective scan tier: $TIER"
@@ -864,6 +883,7 @@ jobs:
           TIER_INPUT: ${{ needs.select-plugins.outputs.tier }}
           SCOPE: ${{ needs.select-plugins.outputs.scope }}
           CHANGED_UNITS: ${{ toJSON(fromJSON(needs.select-plugins.outputs.units || '{}')[matrix.plugin]) }}
+          ROOT_PREFIX: ${{ needs.select-plugins.outputs.root_prefix }}
           SECRET_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           SECRET_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SECRET_VIRUSTOTAL: ${{ secrets.VIRUSTOTAL_API_KEY }}
@@ -896,7 +916,7 @@ jobs:
         # always() so the security gate is still evaluated when an earlier step failed.
         if: always() && (steps.scan.outputs.scan_status == 'findings' || steps.scan.outputs.scan_status == 'error')
         env:
-          LABEL: ${{ steps.scan.outputs.label || format('{0}/{1}', env.PLUGINS_DIR, matrix.plugin) }}
+          LABEL: ${{ steps.scan.outputs.label || (matrix.plugin == 'plugin-root' && 'the plugin at PLUGIN_ROOT' || format('{0}/{1}', env.PLUGINS_DIR, matrix.plugin)) }}
           SCAN_STATUS: ${{ steps.scan.outputs.scan_status }}
           SCAN_EXIT: ${{ steps.scan.outputs.scan_exit }}
           TIER: ${{ needs.select-plugins.outputs.tier }}
