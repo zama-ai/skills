@@ -318,6 +318,10 @@ def part_lines(r: dict) -> list:
     if skill_path.startswith(url_prefix):
         rel_path  = skill_path[len(url_prefix):]
         skill_url = skill_path
+    elif skill_path == url_prefix.rstrip("/"):
+        # The repository root, for a repository that is itself one plugin (PLUGIN_ROOT ".").
+        rel_path  = "."
+        skill_url = skill_path
     else:
         rel_path  = ""
         skill_url = REPO_URL
